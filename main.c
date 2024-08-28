@@ -123,10 +123,6 @@ void CreateProcess(int (*func)(void)) {
 
 int main() {
 
-    sem_unlink("/mutex");
-    sem_unlink("/boarded");
-    shm_unlink("/waitings");
-
     const int fd = shm_open("/waitings", O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
     ftruncate(fd, COUNT * sizeof(int));
     int* waitings = mmap(NULL, COUNT * sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
