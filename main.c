@@ -96,14 +96,19 @@ int fnRiders() {
     srand((unsigned)time(&t) ^ getpid());
 
     int* waitings = shared_get("/waitings",COUNT * sizeof(int), false);
-    //int* pA = shared_get("/A",1 * sizeof(int), false);
+    int* pA = shared_get("/A",1 * sizeof(int), false);
 
     sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
     sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
 
     const int index = rand() % COUNT;
 
-    // cekani
+    sem_wait(mutex);
+    ++*pA;
+    printf("%d: L %d started\n", *pA, index + 1);
+    sem_post(mutex);
+
+    usleep(1000 * 1);
 
     sem_wait(mutex);
     waitings[index]++;
@@ -165,12 +170,14 @@ int main() {
 
     while((wpid = wait(&status)) > 0){};
 
+    sem_unlink("/A");
     sem_unlink("/mutex");
     sem_unlink("/boarded");
     shm_unlink("/waitings");
 
-    char name[256];
-    for(int i = 0; i < COUNT; i++) {
+    for(int i = 0; i < COUNT; i++)
+    {
+        char name[256];
         snprintf(name, 256, "/bus%d", i);
         sem_unlink(name);
     }
