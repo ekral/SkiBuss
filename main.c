@@ -11,20 +11,37 @@
 
 #define COUNT 5
 
+void* shared_get(const char* name, const int length, const bool truncate)
+{
+    const int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
+
+    if(truncate)
+    {
+        ftruncate(fd, length);
+    }
+
+    int* p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+    close(fd);
+
+    return p;
+}
+
 int fnBus() {
-    const int fd = shm_open("/waitings", O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-    int* waitings = mmap(NULL, COUNT * sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+    int* waitings = shared_get("/waitings", COUNT * sizeof(int), false);
+    //int* pA = shared_get("/A",1 * sizeof(int), false);
 
     sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
     sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
     sem_t* buses[COUNT];
 
-    char name[256];
-    for(int i = 0; i < COUNT; i++) {
+    for(int i = 0; i < COUNT; i++)
+    {
+        char name[256];
         snprintf(name, 256, "/bus%d", i);
         buses[i] = sem_open(name, O_CREAT, 0755, 0);
     }
-
 
     bool goBack;
 
@@ -55,9 +72,10 @@ int fnBus() {
             printf("zustava na zastavce: %d\n", waitings[j]);
             printf("volnych mist v autobuse: %d\n", freeSeats);
 
+            printf("depart\n");
+
             sem_post(mutex);
 
-            printf("depart\n");
         }
 
         printf("goBack: %d\n", goBack  );
@@ -70,28 +88,30 @@ int fnBus() {
         sem_close(buses[i]);
     }
 
-    close(fd);
     return 0;
 }
 
 int fnRiders() {
     time_t t;
     srand((unsigned)time(&t) ^ getpid());
-    const int fd = shm_open("/waitings", O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-    int* waitings = mmap(NULL, COUNT * sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+    int* waitings = shared_get("/waitings",COUNT * sizeof(int), false);
+    //int* pA = shared_get("/A",1 * sizeof(int), false);
 
     sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
     sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
 
-    int index = rand() % COUNT;
+    const int index = rand() % COUNT;
 
-    char name[256];
-    snprintf(name, 256, "/bus%d", index);
-    //puts(name);
-    sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
+    // cekani
+
     sem_wait(mutex);
     waitings[index]++;
     sem_post(mutex);
+
+    char name[256];
+    snprintf(name, 256, "/bus%d", index);
+    sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
 
     sem_wait(bus);
     printf("board\n");
@@ -101,7 +121,6 @@ int fnRiders() {
     sem_close(boarded);
     sem_close(bus);
 
-    close(fd);
     return 0;
 }
 
@@ -123,14 +142,16 @@ void CreateProcess(int (*func)(void)) {
 
 int main() {
 
-    const int fd = shm_open("/waitings", O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-    ftruncate(fd, COUNT * sizeof(int));
-    int* waitings = mmap(NULL, COUNT * sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    int* waitings = shared_get("/waitings",COUNT * sizeof(int), true);
+    int* pA = shared_get("/A",1 * sizeof(int), true);
 
-    for(int i = 0; i < COUNT; i++) {
+    for(int i = 0; i < COUNT; i++)
+    {
         waitings[i] = 0;
     }
-    close(fd);
+
+    *pA = 0;
+
     srand(time(NULL));
 
     for(int i = 0; i < 100; i++) {
