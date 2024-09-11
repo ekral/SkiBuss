@@ -27,7 +27,7 @@ void* shared_get(const char* name, const int length, const bool truncate)
     return p;
 }
 
-int fnBus() {
+int fnBus(const int __attribute__((__unused__)) id) {
 
     int* waitings = shared_get("/waitings", COUNT * sizeof(int), false);
     //int* pA = shared_get("/A",1 * sizeof(int), false);
@@ -91,21 +91,23 @@ int fnBus() {
     return 0;
 }
 
-int fnRiders() {
+int fnRiders(const int id) {
     time_t t;
     srand((unsigned)time(&t) ^ getpid());
+    const int index = rand() % COUNT;
 
     int* waitings = shared_get("/waitings",COUNT * sizeof(int), false);
     int* pA = shared_get("/A",1 * sizeof(int), false);
 
     sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
     sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
-
-    const int index = rand() % COUNT;
+    char name[256];
+    snprintf(name, 256, "/bus%d", index);
+    sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
 
     sem_wait(mutex);
     ++*pA;
-    printf("%d: L %d started\n", *pA, index + 1);
+    printf("%d: L %d started\n", *pA, id);
     sem_post(mutex);
 
     usleep(1000 * 1);
@@ -113,10 +115,6 @@ int fnRiders() {
     sem_wait(mutex);
     waitings[index]++;
     sem_post(mutex);
-
-    char name[256];
-    snprintf(name, 256, "/bus%d", index);
-    sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
 
     sem_wait(bus);
     printf("board\n");
@@ -129,14 +127,14 @@ int fnRiders() {
     return 0;
 }
 
-void CreateProcess(int (*func)(void)) {
+void CreateProcess(int (*func)(int), int arg) {
     pid_t p = fork();
 
     if(p < 0) {
         perror("fork fails");
     }
     else if(p == 0) {
-        func();
+        func(arg);
 
         exit(0);
     }
@@ -160,10 +158,10 @@ int main() {
     srand(time(NULL));
 
     for(int i = 0; i < 100; i++) {
-        CreateProcess(fnRiders);
+        CreateProcess(fnRiders, i + 1);
     }
 
-    CreateProcess(fnBus);
+    CreateProcess(fnBus, 0);
 
     pid_t wpid;
     int status;
