@@ -10,6 +10,12 @@
 #include <stdbool.h>
 
 #define COUNT 5
+#define NAME_LEN 256
+
+void createName(char* const str, const int len, const int id)
+{
+    snprintf(str, len, "/bus%d", id);
+}
 
 void* shared_get(const char* name, const int length, const bool truncate)
 {
@@ -27,6 +33,7 @@ void* shared_get(const char* name, const int length, const bool truncate)
     return p;
 }
 
+// diky atributu nemame error nepouzite id
 int fnBus(const int __attribute__((__unused__)) id) {
 
     int* waitings = shared_get("/waitings", COUNT * sizeof(int), false);
@@ -38,8 +45,8 @@ int fnBus(const int __attribute__((__unused__)) id) {
 
     for(int i = 0; i < COUNT; i++)
     {
-        char name[256];
-        snprintf(name, 256, "/bus%d", i);
+        char name[NAME_LEN];
+        createName(name, NAME_LEN, i);
         buses[i] = sem_open(name, O_CREAT, 0755, 0);
     }
 
@@ -94,15 +101,15 @@ int fnBus(const int __attribute__((__unused__)) id) {
 int fnRiders(const int id) {
     time_t t;
     srand((unsigned)time(&t) ^ getpid());
-    const int index = rand() % COUNT;
+    const int busStopIndex = rand() % COUNT;
 
     int* waitings = shared_get("/waitings",COUNT * sizeof(int), false);
     int* pA = shared_get("/A",1 * sizeof(int), false);
 
     sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
     sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
-    char name[256];
-    snprintf(name, 256, "/bus%d", index);
+    char name[NAME_LEN];
+    createName(name, NAME_LEN, busStopIndex);
     sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
 
     sem_wait(mutex);
@@ -113,7 +120,7 @@ int fnRiders(const int id) {
     usleep(1000 * 1);
 
     sem_wait(mutex);
-    waitings[index]++;
+    waitings[busStopIndex]++;
     sem_post(mutex);
 
     sem_wait(bus);
@@ -173,10 +180,11 @@ int main() {
     sem_unlink("/boarded");
     shm_unlink("/waitings");
 
+    char name[NAME_LEN];
+
     for(int i = 0; i < COUNT; i++)
     {
-        char name[256];
-        snprintf(name, 256, "/bus%d", i);
+        createName(name, NAME_LEN, i);
         sem_unlink(name);
     }
 }
