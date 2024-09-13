@@ -22,14 +22,11 @@ void format_name(char* const str, const int len, const int id)
     snprintf(str, len, "/bus%d", id);
 }
 
-void* get_shared(const char* name, const int length, const bool truncate)
+void* create_shared(const char* name, const int length)
 {
     const int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
 
-    if(truncate)
-    {
-        ftruncate(fd, length);
-    }
+    ftruncate(fd, length);
 
     int* p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
@@ -38,20 +35,36 @@ void* get_shared(const char* name, const int length, const bool truncate)
     return p;
 }
 
-sem_t* get_semaphore(const char* const name, const int init)
+void* get_shared(const char* name, const int length)
 {
-    sem_t* semaphore = sem_open(name, O_CREAT, 0755, init);
+    const int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
+
+    int* p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+    close(fd);
+
+    return p;
+}
+
+void create_semaphore(const char* const name, const int init)
+{
+    sem_open(name, O_CREAT, 0755, init);
+}
+
+sem_t* get_semaphore(const char* const name)
+{
+    sem_t* semaphore = sem_open(name, 0);
 
     return semaphore;
 }
 
 int fn_bus(const int Z, const int K, const int TB)
 {
-    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
-    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
+    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
+    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
 
-    sem_t* mutex = get_semaphore(MUTEX_NAME, 1);
-    sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME, 0);
+    sem_t* mutex = get_semaphore(MUTEX_NAME);
+    sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME);
 
     sem_t* stop_semaphores[Z];
 
@@ -60,7 +73,7 @@ int fn_bus(const int Z, const int K, const int TB)
         char name[NAME_LENGTH];
         format_name(name, NAME_LENGTH, i);
 
-        stop_semaphores[i] = get_semaphore(name, 0);
+        stop_semaphores[i] = get_semaphore(name);
     }
 
     sem_wait(mutex);
@@ -117,6 +130,8 @@ int fn_bus(const int Z, const int K, const int TB)
     printf("%d: bus finish\n", ++*ptr_log_count);
     sem_post(mutex);
 
+    // Close semaphores
+
     sem_close(mutex);
     sem_close(boarded_semaphore);
 
@@ -128,23 +143,27 @@ int fn_bus(const int Z, const int K, const int TB)
     return 0;
 }
 
-int fn_rider(const int rider_id, const int Z, const int TL) {
+int fn_rider(const int rider_id, const int Z, const int TL)
+{
+
+    // Nahodne priradim lyzare k zastavce
 
     const int bus_stop_index = rand() % Z;
 
     // Ziskani sdilene pameti
 
-    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
-    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
+    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
+    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
 
     // Ziskani semaforu
 
-    sem_t* mutex = sem_open(MUTEX_NAME, O_CREAT, 0755, 1);
-    sem_t* boarded = sem_open(BOARDED_SEMAPHORE_NAME, O_CREAT, 0755, 0);
+    sem_t* mutex = get_semaphore(MUTEX_NAME);
+    sem_t* boarded = get_semaphore(BOARDED_SEMAPHORE_NAME);
 
     char name[NAME_LENGTH];
     format_name(name, NAME_LENGTH, bus_stop_index);
-    sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
+
+    sem_t* bus = get_semaphore(name);
 
     // Vlastni algoritmus
 
@@ -162,6 +181,8 @@ int fn_rider(const int rider_id, const int Z, const int TL) {
     sem_wait(bus);
     printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
     sem_post(boarded);
+
+    // Zavreni semaforu a odmapovani sdilene pameti
 
     sem_close(mutex);
     sem_close(boarded);
@@ -189,16 +210,30 @@ int main(const int argc, char *argv[])
     const int TB = atoi(argv[5]);
 
     // Inicializace sdilene pameti
-    int* bus_stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), true);
+
+    int* bus_stop_skiers = create_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
 
     for(int i = 0; i < Z; i++)
     {
         bus_stop_skiers[i] = 0;
     }
 
-    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH, true);
+    int* ptr_log_count = create_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
 
     *ptr_log_count = 0;
+
+    // Inicializace semaforu
+
+    create_semaphore(MUTEX_NAME, 1);
+    create_semaphore(BOARDED_SEMAPHORE_NAME, 0);
+
+    for(int i = 0; i < Z; i++)
+    {
+        char name[NAME_LENGTH];
+        format_name(name, NAME_LENGTH, i);
+
+        create_semaphore(name, 0);
+    }
 
     // Spusteni procesu vcetne inicializace nahodnych cisel
 
@@ -217,7 +252,7 @@ int main(const int argc, char *argv[])
         }
     }
 
-    pid_t p = fork();
+    const pid_t p = fork();
 
     if(p == 0)
     {
@@ -238,7 +273,7 @@ int main(const int argc, char *argv[])
 
     }
 
-    // Uvolneni sdilene pameti a mutexu
+    // Uvolneni semaforu a sdilene pameti z operacniho systemu
 
     shm_unlink(LOG_COUNT_NAME);
     shm_unlink(STOP_SKIERS_NAME);
