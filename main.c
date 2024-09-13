@@ -46,9 +46,11 @@ void* get_shared(const char* name, const int length)
     return p;
 }
 
-void create_semaphore(const char* const name, const int init)
+sem_t* create_semaphore(const char* const name, const int init)
 {
-    sem_open(name, O_CREAT, 0755, init);
+    sem_t* semaphore = sem_open(name, O_CREAT, 0755, init);
+
+    return semaphore;
 }
 
 sem_t* get_semaphore(const char* const name)
@@ -60,8 +62,12 @@ sem_t* get_semaphore(const char* const name)
 
 int fn_bus(const int Z, const int K, const int TB)
 {
+    // Ziskani sdilene pameti
+
     int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
     int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
+
+    // Ziskani semaforu
 
     sem_t* mutex = get_semaphore(MUTEX_NAME);
     sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME);
@@ -75,6 +81,8 @@ int fn_bus(const int Z, const int K, const int TB)
 
         stop_semaphores[i] = get_semaphore(name);
     }
+
+    // Vlastni algoritmus
 
     sem_wait(mutex);
     printf("%d: bus started\n", ++*ptr_log_count);
@@ -90,8 +98,6 @@ int fn_bus(const int Z, const int K, const int TB)
 
         for(int j = 0; j < Z; j++)
         {
-            usleep(rand() % TB); // uspani na ddbu cesty k dalsi zastavce
-
             sem_wait(mutex);
 
             printf("%d: bus arrived to %d\n", ++*ptr_log_count, j + 1);
@@ -117,6 +123,7 @@ int fn_bus(const int Z, const int K, const int TB)
 
             sem_post(mutex);
 
+            usleep(rand() % TB); // uspani na ddbu cesty k dalsi zastavce
         }
 
         sem_wait(mutex);
@@ -154,7 +161,6 @@ int fn_bus(const int Z, const int K, const int TB)
 
 int fn_rider(const int rider_id, const int Z, const int TL)
 {
-
     // Nahodne priradim lyzare k zastavce
 
     const int bus_stop_index = rand() % Z;
@@ -167,12 +173,12 @@ int fn_rider(const int rider_id, const int Z, const int TL)
     // Ziskani semaforu
 
     sem_t* mutex = get_semaphore(MUTEX_NAME);
-    sem_t* boarded = get_semaphore(BOARDED_SEMAPHORE_NAME);
+    sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME);
 
     char name[NAME_LENGTH];
     format_name(name, NAME_LENGTH, bus_stop_index);
 
-    sem_t* bus = get_semaphore(name);
+    sem_t* stop_semaphore = get_semaphore(name);
 
     // Vlastni algoritmus
 
@@ -187,16 +193,16 @@ int fn_rider(const int rider_id, const int Z, const int TL)
     printf("%d: L %d arrived to %d\n", ++*ptr_log_count, rider_id, bus_stop_index + 1);
     sem_post(mutex);
 
-    sem_wait(bus);
+    sem_wait(stop_semaphore);
     printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
-    sem_post(boarded);
+    sem_post(boarded_semaphore);
 
     // Zavreni semaforu a odmapovani sdilene pameti pro tento proces
     // zavreli by se automaticky po dokonceni procesu, ale je lepsi je uzavrit explicitne
 
     sem_close(mutex);
-    sem_close(boarded);
-    sem_close(bus);
+    sem_close(boarded_semaphore);
+    sem_close(stop_semaphore);
 
     munmap(LOG_COUNT_NAME, LOG_COUNT_LENGTH);
     munmap(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
@@ -234,17 +240,21 @@ int main(const int argc, char *argv[])
 
     *ptr_log_count = 0;
 
-    // Inicializace semaforu
+    // Inicializace semaforu a jejich zavreni, protoze je jen vytvorime pro pouziti v jinych procesech
 
-    create_semaphore(MUTEX_NAME, 1);
-    create_semaphore(BOARDED_SEMAPHORE_NAME, 0);
+    sem_t* mutex = create_semaphore(MUTEX_NAME, 1);
+    sem_close(mutex);
+
+    sem_t* boarded_smaphore = create_semaphore(BOARDED_SEMAPHORE_NAME, 0);
+    sem_close(boarded_smaphore);
 
     for(int i = 0; i < Z; i++)
     {
         char name[NAME_LENGTH];
         format_name(name, NAME_LENGTH, i);
 
-        create_semaphore(name, 0);
+        sem_t* stop_semaphore = create_semaphore(name, 0);
+        sem_close(stop_semaphore);
     }
 
     // Spusteni procesu vcetne inicializace nahodnych cisel
