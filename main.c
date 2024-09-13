@@ -119,7 +119,7 @@ int fn_bus(const int Z, const int K, const int TB)
                 go_back = true;
             }
 
-            printf("%d: bus leaving  %d\n", ++*ptr_log_count, j + 1);
+            printf("%d: bus leaving %d\n", ++*ptr_log_count, j + 1);
 
             sem_post(mutex);
 
