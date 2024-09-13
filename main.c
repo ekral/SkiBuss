@@ -30,7 +30,7 @@ void* create_shared(const char* name, const int length)
 
     int* p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-    close(fd);
+    close(fd); // po namapovani muzu fd zavrit
 
     return p;
 }
@@ -41,7 +41,7 @@ void* get_shared(const char* name, const int length)
 
     int* p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-    close(fd);
+    close(fd); // po namapovani muzu fd zavrit
 
     return p;
 }
