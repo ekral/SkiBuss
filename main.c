@@ -9,44 +9,15 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 
-#define NAME_LEN 256
+#define NAME_LENGTH 256
+#define STOP_SKIERS_NAME "/waitings"
+#define STOP_SKIERS_LENGTH(n) n * sizeof(int)
+#define LOG_COUNT_NAME "/A"
+#define LOG_COUNT_LENGTH sizeof(int)
+#define MUTEX_NAME "/mutex"
+#define BOARDED_SEMAPHORE_NAME "/boarded"
 
-struct Shared
-{
-    const char* const name;
-    const size_t length;
-};
-
-void* shared_init(const struct Shared shared)
-{
-    const int fd = shm_open(shared.name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-
-    ftruncate(fd, shared.length);
-
-    void* data = mmap(NULL, shared.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
-    close(fd);
-
-    return data;
-}
-
-void* shared_open(const struct Shared shared)
-{
-    const int fd = shm_open(shared.name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-
-    void* data = mmap(NULL, shared.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
-    close(fd);
-
-    return data;
-}
-
-void shared_release(void* const data, const int length)
-{
-    munmap(data, length);
-}
-
-void createName(char* const str, const int len, const int id)
+void format_name(char* const str, const int len, const int id)
 {
     snprintf(str, len, "/bus%d", id);
 }
@@ -67,134 +38,135 @@ void* shared_get(const char* name, const int length, const bool truncate)
     return p;
 }
 
-int fnBus(const int Z, const int K, const int TB)
+int fn_bus(const int Z, const int K, const int TB)
 {
+    int* stop_skiers = shared_get(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
+    int* ptr_log_count = shared_get(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
 
-    int* waitings = shared_get("/waitings", Z * sizeof(int), false);
-    int* pA = shared_get("/A",1 * sizeof(int), false);
-
-    sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
-    sem_t* boardedSemaphore = sem_open("/boarded", O_CREAT, 0755, 0);
-    sem_t* busStopSemaphores[Z];
+    sem_t* mutex = sem_open(MUTEX_NAME, O_CREAT, 0755, 1);
+    sem_t* boarded_semaphore = sem_open(BOARDED_SEMAPHORE_NAME, O_CREAT, 0755, 0);
+    sem_t* stop_semaphores[Z];
 
     sem_wait(mutex);
-    printf("%d: bus started\n", ++*pA);
+    printf("%d: bus started\n", ++*ptr_log_count);
     sem_post(mutex);
 
     for(int i = 0; i < Z; i++)
     {
-        char name[NAME_LEN];
-        createName(name, NAME_LEN, i);
-        busStopSemaphores[i] = sem_open(name, O_CREAT, 0755, 0);
+        char name[NAME_LENGTH];
+        format_name(name, NAME_LENGTH, i);
+
+        stop_semaphores[i] = sem_open(name, O_CREAT, 0755, 0);
     }
 
-    bool goBack;
+    bool go_back;
 
     do {
-        int freeSeats = K;
+        int free_seats = K;
 
-        goBack = false;
+        go_back = false;
 
         for(int j = 0; j < Z; j++) {
 
             usleep(rand() % TB);
 
             sem_wait(mutex);
-            printf("%d: bus arrived to %d\n", ++*pA, j + 1);
-            const int n = (waitings[j] > freeSeats) ? freeSeats: waitings[j];
+            printf("%d: bus arrived to %d\n", ++*ptr_log_count, j + 1);
+            const int n = (stop_skiers[j] > free_seats) ? free_seats: stop_skiers[j];
             for (int i = 0; i < n; i++) {
-                sem_post(busStopSemaphores[j]);
-                sem_wait(boardedSemaphore);
+                sem_post(stop_semaphores[j]);
+                sem_wait(boarded_semaphore);
             }
 
-            freeSeats -= n;
+            free_seats -= n;
 
-            waitings[j] -= n;
+            stop_skiers[j] -= n;
 
-
-            if(waitings[j] > 0) {
-                goBack = true;
+            if(stop_skiers[j] > 0)
+            {
+                go_back = true;
             }
 
-            printf("%d: bus leaving  %d\n", ++*pA, j + 1);
+            printf("%d: bus leaving  %d\n", ++*ptr_log_count, j + 1);
 
             sem_post(mutex);
 
         }
 
         sem_wait(mutex);
-        printf("%d: bus arrived to final\n", ++*pA);
+        printf("%d: bus arrived to final\n", ++*ptr_log_count);
         sem_post(mutex);
 
         // TODO synchronizace vystupu na konecne
 
         sem_wait(mutex);
-        printf("%d: bus leaving final\n", ++*pA);
+        printf("%d: bus leaving final\n", ++*ptr_log_count);
         sem_post(mutex);
 
-    } while(goBack);
+    } while(go_back);
 
     sem_wait(mutex);
-    printf("%d: bus finish\n", ++*pA);
+    printf("%d: bus finish\n", ++*ptr_log_count);
     sem_post(mutex);
 
     sem_close(mutex);
-    sem_close(boardedSemaphore);
-    for(int i = 0; i < Z; i++) {
-        sem_close(busStopSemaphores[i]);
+    sem_close(boarded_semaphore);
+
+    for(int i = 0; i < Z; i++)
+    {
+        sem_close(stop_semaphores[i]);
     }
 
     return 0;
 }
 
-int fnRiders(const int riderId, const int Z, const int TL) {
+int fn_rider(const int rider_id, const int Z, const int TL) {
 
-    const int busStopIndex = rand() % Z;
+    const int bus_stop_index = rand() % Z;
 
     // Ziskani sdilene pameti
 
-    int* busStopSkiers = shared_get("/waitings", Z * sizeof(int), false);
-    int* pA = shared_get("/A",1 * sizeof(int), false);
+    int* stop_skiers = shared_get(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
+    int* ptr_log_count = shared_get(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
 
     // Ziskani semaforu
 
-    sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
-    sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
+    sem_t* mutex = sem_open(MUTEX_NAME, O_CREAT, 0755, 1);
+    sem_t* boarded = sem_open(BOARDED_SEMAPHORE_NAME, O_CREAT, 0755, 0);
 
-    char name[NAME_LEN];
-    createName(name, NAME_LEN, busStopIndex);
+    char name[NAME_LENGTH];
+    format_name(name, NAME_LENGTH, bus_stop_index);
     sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
 
     // Vlastni algoritmus
 
     sem_wait(mutex);
-    printf("%d: L %d started\n", ++*pA, riderId);
+    printf("%d: L %d started\n", ++*ptr_log_count, rider_id);
     sem_post(mutex);
 
-    usleep(rand() % TL);
+    usleep(rand() % TL); // nahodne trvani snidane
 
     sem_wait(mutex);
-    busStopSkiers[busStopIndex]++;
-    printf("%d: L %d arrived to %d\n", ++*pA, riderId, busStopIndex + 1);
+    stop_skiers[bus_stop_index]++;
+    printf("%d: L %d arrived to %d\n", ++*ptr_log_count, rider_id, bus_stop_index + 1);
     sem_post(mutex);
 
     sem_wait(bus);
-    printf("%d: L %d boarded\n", ++*pA, riderId);
+    printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
     sem_post(boarded);
 
     sem_close(mutex);
     sem_close(boarded);
     sem_close(bus);
 
-    munmap("/A", sizeof(int));
-    munmap("/waitings", Z * sizeof(int));
+    munmap(LOG_COUNT_NAME, LOG_COUNT_LENGTH);
+    munmap(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
 
     return 0;
 }
 
 int main(const int argc, char *argv[])
 {
-
     // Zpracovani vstupnich argumentu
 
     if(argc != 6)
@@ -209,17 +181,16 @@ int main(const int argc, char *argv[])
     const int TB = atoi(argv[5]);
 
     // Inicializace sdilene pameti
-
-    int* busStopSkiers = shared_get("/waitings", Z * sizeof(int), true);
+    int* bus_stop_skiers = shared_get(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), true);
 
     for(int i = 0; i < Z; i++)
     {
-        busStopSkiers[i] = 0;
+        bus_stop_skiers[i] = 0;
     }
 
-    int* pA = shared_get("/A",1 * sizeof(int), true);
+    int* ptr_log_count = shared_get(LOG_COUNT_NAME,LOG_COUNT_LENGTH, true);
 
-    *pA = 0;
+    *ptr_log_count = 0;
 
     // Spusteni procesu vcetne inicializace nahodnych cisel
 
@@ -232,7 +203,7 @@ int main(const int argc, char *argv[])
             time_t t;
             srand((unsigned)time(&t) ^ getpid());
 
-            fnRiders(i + 1, Z, TL);
+            fn_rider(i + 1, Z, TL);
 
             exit(0);
         }
@@ -245,7 +216,7 @@ int main(const int argc, char *argv[])
         time_t t;
         srand((unsigned)time(&t) ^ getpid());
 
-        fnBus(Z, K, TB);
+        fn_bus(Z, K, TB);
 
         exit(0);
     }
@@ -261,16 +232,17 @@ int main(const int argc, char *argv[])
 
     // Uvolneni sdilene pameti a mutexu
 
-    shm_unlink("/A");
-    shm_unlink("/waitings");
+    shm_unlink(LOG_COUNT_NAME);
+    shm_unlink(STOP_SKIERS_NAME);
 
-    sem_unlink("/mutex");
-    sem_unlink("/boarded");
+    sem_unlink(MUTEX_NAME);
+    sem_unlink(BOARDED_SEMAPHORE_NAME);
 
     for(int i = 0; i < Z; i++)
     {
-        char name[NAME_LEN];
-        createName(name, NAME_LEN, i);
+        char name[NAME_LENGTH];
+        format_name(name, NAME_LENGTH, i);
+
         sem_unlink(name);
     }
 }
