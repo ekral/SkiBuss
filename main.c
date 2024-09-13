@@ -113,8 +113,7 @@ int fnBus(const int Z, const int K, const int TB)
 }
 
 int fnRiders(const int riderId, const int Z, const int TL) {
-    time_t t;
-    srand((unsigned)time(&t) ^ getpid());
+
     const int busStopIndex = rand() % Z;
 
     int* waitings = shared_get("/waitings",Z * sizeof(int), false);
@@ -149,10 +148,8 @@ int fnRiders(const int riderId, const int Z, const int TL) {
     return 0;
 }
 
-int main(int argc, char *argv[])
+int main(const int argc, char *argv[])
 {
-    srand(time(NULL));
-
     if(argc != 6)
     {
         return -1;
@@ -182,6 +179,9 @@ int main(int argc, char *argv[])
 
         if(p == 0)
         {
+            time_t t;
+            srand((unsigned)time(&t) ^ getpid());
+
             fnRiders(i + 1, Z, TL);
 
             exit(0);
@@ -192,6 +192,9 @@ int main(int argc, char *argv[])
 
     if(p == 0)
     {
+        time_t t;
+        srand((unsigned)time(&t) ^ getpid());
+
         fnBus(Z, K, TB);
 
         exit(0);
