@@ -9,7 +9,6 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 
-#define COUNT 5
 #define NAME_LEN 256
 
 void createName(char* const str, const int len, const int id)
@@ -33,17 +32,21 @@ void* shared_get(const char* name, const int length, const bool truncate)
     return p;
 }
 
-// diky atributu nemame error nepouzite id
-int fnBus(const int __attribute__((__unused__)) id) {
+int fnBus(const int Z, const int K, const int TB)
+{
 
-    int* waitings = shared_get("/waitings", COUNT * sizeof(int), false);
-    //int* pA = shared_get("/A",1 * sizeof(int), false);
+    int* waitings = shared_get("/waitings", Z * sizeof(int), false);
+    int* pA = shared_get("/A",1 * sizeof(int), false);
 
     sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
     sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
-    sem_t* buses[COUNT];
+    sem_t* buses[Z];
 
-    for(int i = 0; i < COUNT; i++)
+    sem_wait(mutex);
+    printf("%d: bus started\n", ++*pA);
+    sem_post(mutex);
+
+    for(int i = 0; i < Z; i++)
     {
         char name[NAME_LEN];
         createName(name, NAME_LEN, i);
@@ -53,14 +56,16 @@ int fnBus(const int __attribute__((__unused__)) id) {
     bool goBack;
 
     do {
-        int freeSeats = 50;
+        int freeSeats = K;
 
         goBack = false;
-        puts("Nova cesta______________________________");
-        for(int j = 0; j < COUNT; j++) {
-            printf("BUS arrived to %d\n", j + 1);
+
+        for(int j = 0; j < Z; j++) {
+
+            usleep(rand() % TB);
 
             sem_wait(mutex);
+            printf("%d: bus arrived to %d\n", ++*pA, j + 1);
             const int n = (waitings[j] > freeSeats) ? freeSeats: waitings[j];
             for (int i = 0; i < n; i++) {
                 sem_post(buses[j]);
@@ -71,60 +76,70 @@ int fnBus(const int __attribute__((__unused__)) id) {
 
             waitings[j] -= n;
 
+
             if(waitings[j] > 0) {
                 goBack = true;
             }
 
-            printf( "nastoupilo: %d\n", n);
-            printf("zustava na zastavce: %d\n", waitings[j]);
-            printf("volnych mist v autobuse: %d\n", freeSeats);
-
-            printf("depart\n");
+            printf("%d: bus leaving  %d\n", ++*pA, j + 1);
 
             sem_post(mutex);
 
         }
 
-        printf("goBack: %d\n", goBack  );
+        sem_wait(mutex);
+        printf("%d: bus arrived to final\n", ++*pA);
+        sem_post(mutex);
+
+        // TODO synchronizace vystupu na konecne
+
+        sem_wait(mutex);
+        printf("%d: bus leaving final\n", ++*pA);
+        sem_post(mutex);
 
     } while(goBack);
 
+    sem_wait(mutex);
+    printf("%d: bus finish\n", ++*pA);
+    sem_post(mutex);
+
     sem_close(mutex);
     sem_close(boarded);
-    for(int i = 0; i < COUNT; i++) {
+    for(int i = 0; i < Z; i++) {
         sem_close(buses[i]);
     }
 
     return 0;
 }
 
-int fnRiders(const int id) {
+int fnRiders(const int riderId, const int Z, const int TL) {
     time_t t;
     srand((unsigned)time(&t) ^ getpid());
-    const int busStopIndex = rand() % COUNT;
+    const int busStopIndex = rand() % Z;
 
-    int* waitings = shared_get("/waitings",COUNT * sizeof(int), false);
+    int* waitings = shared_get("/waitings",Z * sizeof(int), false);
     int* pA = shared_get("/A",1 * sizeof(int), false);
 
     sem_t* mutex = sem_open("/mutex", O_CREAT, 0755, 1);
     sem_t* boarded = sem_open("/boarded", O_CREAT, 0755, 0);
+
     char name[NAME_LEN];
     createName(name, NAME_LEN, busStopIndex);
     sem_t* bus = sem_open(name, O_CREAT, 0755, 0);
 
     sem_wait(mutex);
-    ++*pA;
-    printf("%d: L %d started\n", *pA, id);
+    printf("%d: L %d started\n", ++*pA, riderId);
     sem_post(mutex);
 
-    usleep(1000 * 1);
+    usleep(rand() % TL);
 
     sem_wait(mutex);
     waitings[busStopIndex]++;
+    printf("%d: L %d arrived to %d\n", ++*pA, riderId, busStopIndex + 1);
     sem_post(mutex);
 
     sem_wait(bus);
-    printf("board\n");
+    printf("%d: L %d boarded\n", ++*pA, riderId);
     sem_post(boarded);
 
     sem_close(mutex);
@@ -134,41 +149,53 @@ int fnRiders(const int id) {
     return 0;
 }
 
-void CreateProcess(int (*func)(int), int arg) {
-    pid_t p = fork();
+int main(int argc, char *argv[])
+{
+    srand(time(NULL));
 
-    if(p < 0) {
-        perror("fork fails");
+    if(argc != 6)
+    {
+        return -1;
     }
-    else if(p == 0) {
-        func(arg);
 
-        exit(0);
-    }
-    else {
+    const int L = atoi(argv[1]);
+    const int Z = atoi(argv[2]);
+    const int K = atoi(argv[3]);
+    const int TL = atoi(argv[4]);
+    const int TB = atoi(argv[5]);
 
-    }
-}
+    int* waitings = shared_get("/waitings",Z * sizeof(int), true);
 
-int main() {
-
-    int* waitings = shared_get("/waitings",COUNT * sizeof(int), true);
-    int* pA = shared_get("/A",1 * sizeof(int), true);
-
-    for(int i = 0; i < COUNT; i++)
+    for(int i = 0; i < Z; i++)
     {
         waitings[i] = 0;
     }
 
+    int* pA = shared_get("/A",1 * sizeof(int), true);
+
     *pA = 0;
 
-    srand(time(NULL));
 
-    for(int i = 0; i < 100; i++) {
-        CreateProcess(fnRiders, i + 1);
+    for(int i = 0; i < L; i++) {
+
+        pid_t p = fork();
+
+        if(p == 0)
+        {
+            fnRiders(i + 1, Z, TL);
+
+            exit(0);
+        }
     }
 
-    CreateProcess(fnBus, 0);
+    pid_t p = fork();
+
+    if(p == 0)
+    {
+        fnBus(Z, K, TB);
+
+        exit(0);
+    }
 
     pid_t wpid;
     int status;
@@ -182,7 +209,7 @@ int main() {
 
     char name[NAME_LEN];
 
-    for(int i = 0; i < COUNT; i++)
+    for(int i = 0; i < Z; i++)
     {
         createName(name, NAME_LEN, i);
         sem_unlink(name);
