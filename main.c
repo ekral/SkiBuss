@@ -37,7 +37,7 @@ void* create_shared(const char* name, const int length)
 
 void* get_shared(const char* name, const int length)
 {
-    const int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
+    const int fd = shm_open(name, O_RDWR, S_IRWXU | S_IRWXG);
 
     int* p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
@@ -82,19 +82,24 @@ int fn_bus(const int Z, const int K, const int TB)
 
     bool go_back;
 
-    do {
+    do
+    {
         int free_seats = K;
 
         go_back = false;
 
-        for(int j = 0; j < Z; j++) {
-
-            usleep(rand() % TB);
+        for(int j = 0; j < Z; j++)
+        {
+            usleep(rand() % TB); // uspani na ddbu cesty k dalsi zastavce
 
             sem_wait(mutex);
+
             printf("%d: bus arrived to %d\n", ++*ptr_log_count, j + 1);
+
             const int n = (stop_skiers[j] > free_seats) ? free_seats: stop_skiers[j];
-            for (int i = 0; i < n; i++) {
+
+            for (int i = 0; i < n; i++)
+            {
                 sem_post(stop_semaphores[j]);
                 sem_wait(boarded_semaphore);
             }
@@ -130,7 +135,8 @@ int fn_bus(const int Z, const int K, const int TB)
     printf("%d: bus finish\n", ++*ptr_log_count);
     sem_post(mutex);
 
-    // Close semaphores
+    // Zavreni semaforu a odmapovani sdilene pameti pro tento proces
+    // zavreli by se automaticky po dokonceni procesu, ale je lepsi je uzavrit explicitne
 
     sem_close(mutex);
     sem_close(boarded_semaphore);
@@ -139,6 +145,9 @@ int fn_bus(const int Z, const int K, const int TB)
     {
         sem_close(stop_semaphores[i]);
     }
+
+    munmap(LOG_COUNT_NAME, LOG_COUNT_LENGTH);
+    munmap(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
 
     return 0;
 }
@@ -182,7 +191,8 @@ int fn_rider(const int rider_id, const int Z, const int TL)
     printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
     sem_post(boarded);
 
-    // Zavreni semaforu a odmapovani sdilene pameti
+    // Zavreni semaforu a odmapovani sdilene pameti pro tento proces
+    // zavreli by se automaticky po dokonceni procesu, ale je lepsi je uzavrit explicitne
 
     sem_close(mutex);
     sem_close(boarded);
@@ -196,6 +206,8 @@ int fn_rider(const int rider_id, const int Z, const int TL)
 
 int main(const int argc, char *argv[])
 {
+    // TODO osetreni erroru
+
     // Zpracovani vstupnich argumentu
 
     if(argc != 6)
