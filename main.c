@@ -22,7 +22,7 @@ void format_name(char* const str, const int len, const int id)
     snprintf(str, len, "/bus%d", id);
 }
 
-void* shared_get(const char* name, const int length, const bool truncate)
+void* get_shared(const char* name, const int length, const bool truncate)
 {
     const int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
 
@@ -38,26 +38,34 @@ void* shared_get(const char* name, const int length, const bool truncate)
     return p;
 }
 
+sem_t* get_semaphore(const char* const name, const int init)
+{
+    sem_t* semaphore = sem_open(name, O_CREAT, 0755, init);
+
+    return semaphore;
+}
+
 int fn_bus(const int Z, const int K, const int TB)
 {
-    int* stop_skiers = shared_get(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
-    int* ptr_log_count = shared_get(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
+    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
+    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
 
-    sem_t* mutex = sem_open(MUTEX_NAME, O_CREAT, 0755, 1);
-    sem_t* boarded_semaphore = sem_open(BOARDED_SEMAPHORE_NAME, O_CREAT, 0755, 0);
+    sem_t* mutex = get_semaphore(MUTEX_NAME, 1);
+    sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME, 0);
+
     sem_t* stop_semaphores[Z];
-
-    sem_wait(mutex);
-    printf("%d: bus started\n", ++*ptr_log_count);
-    sem_post(mutex);
 
     for(int i = 0; i < Z; i++)
     {
         char name[NAME_LENGTH];
         format_name(name, NAME_LENGTH, i);
 
-        stop_semaphores[i] = sem_open(name, O_CREAT, 0755, 0);
+        stop_semaphores[i] = get_semaphore(name, 0);
     }
+
+    sem_wait(mutex);
+    printf("%d: bus started\n", ++*ptr_log_count);
+    sem_post(mutex);
 
     bool go_back;
 
@@ -126,8 +134,8 @@ int fn_rider(const int rider_id, const int Z, const int TL) {
 
     // Ziskani sdilene pameti
 
-    int* stop_skiers = shared_get(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
-    int* ptr_log_count = shared_get(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
+    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), false);
+    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH, false);
 
     // Ziskani semaforu
 
@@ -181,14 +189,14 @@ int main(const int argc, char *argv[])
     const int TB = atoi(argv[5]);
 
     // Inicializace sdilene pameti
-    int* bus_stop_skiers = shared_get(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), true);
+    int* bus_stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z), true);
 
     for(int i = 0; i < Z; i++)
     {
         bus_stop_skiers[i] = 0;
     }
 
-    int* ptr_log_count = shared_get(LOG_COUNT_NAME,LOG_COUNT_LENGTH, true);
+    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH, true);
 
     *ptr_log_count = 0;
 
