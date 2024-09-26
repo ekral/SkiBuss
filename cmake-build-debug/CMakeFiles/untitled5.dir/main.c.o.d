@@ -91,4 +91,8 @@ CMakeFiles/untitled5.dir/main.c.o: \
  /usr/include/x86_64-linux-gnu/bits/types/struct_sigstack.h \
  /usr/include/x86_64-linux-gnu/bits/sigthread.h \
  /usr/include/x86_64-linux-gnu/bits/signal_ext.h \
- /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h
+ /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h /usr/include/errno.h \
+ /usr/include/x86_64-linux-gnu/bits/errno.h /usr/include/linux/errno.h \
+ /usr/include/x86_64-linux-gnu/asm/errno.h \
+ /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
+ /usr/include/string.h /usr/include/strings.h

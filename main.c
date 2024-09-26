@@ -8,6 +8,8 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <stdbool.h>
+#include <errno.h>
+#include <string.h>
 
 #define NAME_LENGTH 256
 #define STOP_SKIERS_NAME "/waitings"
@@ -16,10 +18,11 @@
 #define LOG_COUNT_LENGTH sizeof(int)
 #define MUTEX_NAME "/mutex"
 #define BOARDED_SEMAPHORE_NAME "/boarded"
+#define UNBOARDED_SEMAPHORE_NAME "/unboarded"
 
-void format_name(char* const str, const int len, const int id)
+void format_name(char* const str, const int len, const long id)
 {
-    snprintf(str, len, "/bus%d", id);
+    snprintf(str, len, "/bus%ld", id);
 }
 
 void* create_shared(const char* name, const int length)
@@ -71,6 +74,7 @@ int fn_bus(const int Z, const int K, const int TB)
 
     sem_t* mutex = get_semaphore(MUTEX_NAME);
     sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME);
+    sem_t* unboarded_semaphore = get_semaphore(UNBOARDED_SEMAPHORE_NAME);
 
     sem_t* stop_semaphores[Z];
 
@@ -123,7 +127,7 @@ int fn_bus(const int Z, const int K, const int TB)
 
             sem_post(mutex);
 
-            usleep(rand() % TB); // uspani na ddbu cesty k dalsi zastavce
+            usleep(random() % TB); // uspani na ddbu cesty k dalsi zastavce
         }
 
         sem_wait(mutex);
@@ -131,6 +135,12 @@ int fn_bus(const int Z, const int K, const int TB)
         sem_post(mutex);
 
         // TODO synchronizace vystupu na konecne
+        int riders = K - free_seats;
+
+        for(int j = 0; j < riders; j++)
+        {
+            sem_post(unboarded_semaphore);
+        }
 
         sem_wait(mutex);
         printf("%d: bus leaving final\n", ++*ptr_log_count);
@@ -142,11 +152,13 @@ int fn_bus(const int Z, const int K, const int TB)
     printf("%d: bus finish\n", ++*ptr_log_count);
     sem_post(mutex);
 
+
     // Zavreni semaforu a odmapovani sdilene pameti pro tento proces
     // zavreli by se automaticky po dokonceni procesu, ale je lepsi je uzavrit explicitne
 
     sem_close(mutex);
     sem_close(boarded_semaphore);
+    sem_close(unboarded_semaphore);
 
     for(int i = 0; i < Z; i++)
     {
@@ -163,7 +175,7 @@ int fn_rider(const int rider_id, const int Z, const int TL)
 {
     // Nahodne priradim lyzare k zastavce
 
-    const int bus_stop_index = rand() % Z;
+    const long bus_stop_index = random() % Z;
 
     // Ziskani sdilene pameti
 
@@ -174,6 +186,7 @@ int fn_rider(const int rider_id, const int Z, const int TL)
 
     sem_t* mutex = get_semaphore(MUTEX_NAME);
     sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME);
+    sem_t* unboarded_semaphore = get_semaphore(UNBOARDED_SEMAPHORE_NAME);
 
     char name[NAME_LENGTH];
     format_name(name, NAME_LENGTH, bus_stop_index);
@@ -186,22 +199,33 @@ int fn_rider(const int rider_id, const int Z, const int TL)
     printf("%d: L %d started\n", ++*ptr_log_count, rider_id);
     sem_post(mutex);
 
-    usleep(rand() % TL); // nahodne trvani snidane
+    usleep(random() % TL); // nahodne trvani snidane
 
     sem_wait(mutex);
     stop_skiers[bus_stop_index]++;
-    printf("%d: L %d arrived to %d\n", ++*ptr_log_count, rider_id, bus_stop_index + 1);
+    printf("%d: L %d arrived to %ld\n", ++*ptr_log_count, rider_id, bus_stop_index + 1);
     sem_post(mutex);
 
     sem_wait(stop_semaphore);
-    printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
+
     sem_post(boarded_semaphore);
+
+    sem_wait(mutex);
+    printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
+    sem_post(mutex);
+
+    sem_wait(unboarded_semaphore);
+
+    sem_wait(mutex);
+    printf("%d: L %d unboarded\n", ++*ptr_log_count, rider_id);
+    sem_post(mutex);
 
     // Zavreni semaforu a odmapovani sdilene pameti pro tento proces
     // zavreli by se automaticky po dokonceni procesu, ale je lepsi je uzavrit explicitne
 
     sem_close(mutex);
     sem_close(boarded_semaphore);
+    sem_close(unboarded_semaphore);
     sem_close(stop_semaphore);
 
     munmap(LOG_COUNT_NAME, LOG_COUNT_LENGTH);
@@ -221,7 +245,24 @@ int main(const int argc, char *argv[])
         return -1;
     }
 
-    const int L = atoi(argv[1]);
+    char* str_end;
+
+    errno = 0;
+
+    const long L = strtol(argv[1], &str_end, 10);
+
+    if(str_end == argv[1])
+    {
+        puts("Neplatny format L.");
+
+        if (errno == ERANGE)
+        {
+            puts("Range error occurred.");
+        }
+
+        return -1;
+    }
+
     const int Z = atoi(argv[2]);
     const int K = atoi(argv[3]);
     const int TL = atoi(argv[4]);
@@ -248,6 +289,9 @@ int main(const int argc, char *argv[])
     sem_t* boarded_smaphore = create_semaphore(BOARDED_SEMAPHORE_NAME, 0);
     sem_close(boarded_smaphore);
 
+    sem_t* uboarded_smaphore = create_semaphore(UNBOARDED_SEMAPHORE_NAME, 0);
+    sem_close(uboarded_smaphore);
+
     for(int i = 0; i < Z; i++)
     {
         char name[NAME_LENGTH];
@@ -266,7 +310,7 @@ int main(const int argc, char *argv[])
         if(p == 0)
         {
             time_t t;
-            srand((unsigned)time(&t) ^ getpid());
+            srandom((unsigned)time(&t) ^ getpid());
 
             fn_rider(i + 1, Z, TL);
 
@@ -279,7 +323,7 @@ int main(const int argc, char *argv[])
     if(p == 0)
     {
         time_t t;
-        srand((unsigned)time(&t) ^ getpid());
+        srandom((unsigned)time(&t) ^ getpid());
 
         fn_bus(Z, K, TB);
 
@@ -302,6 +346,7 @@ int main(const int argc, char *argv[])
 
     sem_unlink(MUTEX_NAME);
     sem_unlink(BOARDED_SEMAPHORE_NAME);
+    sem_unlink(UNBOARDED_SEMAPHORE_NAME);
 
     for(int i = 0; i < Z; i++)
     {
@@ -310,4 +355,6 @@ int main(const int argc, char *argv[])
 
         sem_unlink(name);
     }
+
+    return 0;
 }

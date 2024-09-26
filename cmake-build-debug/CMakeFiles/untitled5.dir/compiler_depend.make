@@ -103,8 +103,24 @@ CMakeFiles/untitled5.dir/main.c.o: ../main.c \
   /usr/include/x86_64-linux-gnu/bits/types/struct_sigstack.h \
   /usr/include/x86_64-linux-gnu/bits/sigthread.h \
   /usr/include/x86_64-linux-gnu/bits/signal_ext.h \
-  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h
+  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h \
+  /usr/include/errno.h \
+  /usr/include/x86_64-linux-gnu/bits/errno.h \
+  /usr/include/linux/errno.h \
+  /usr/include/x86_64-linux-gnu/asm/errno.h \
+  /usr/include/asm-generic/errno.h \
+  /usr/include/asm-generic/errno-base.h \
+  /usr/include/string.h \
+  /usr/include/strings.h
 
+
+/usr/include/asm-generic/errno-base.h:
+
+/usr/include/asm-generic/errno.h:
+
+/usr/include/x86_64-linux-gnu/bits/errno.h:
+
+/usr/include/errno.h:
 
 /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h:
 
@@ -138,6 +154,8 @@ CMakeFiles/untitled5.dir/main.c.o: ../main.c \
 
 /usr/include/x86_64-linux-gnu/bits/mman-map-flags-generic.h:
 
+/usr/include/strings.h:
+
 /usr/include/x86_64-linux-gnu/bits/siginfo-arch.h:
 
 /usr/include/x86_64-linux-gnu/bits/mman.h:
@@ -160,6 +178,8 @@ CMakeFiles/untitled5.dir/main.c.o: ../main.c \
 
 /usr/include/x86_64-linux-gnu/bits/fcntl-linux.h:
 
+/usr/include/linux/errno.h:
+
 /usr/include/x86_64-linux-gnu/bits/types/sigevent_t.h:
 
 /usr/include/x86_64-linux-gnu/bits/fcntl.h:
@@ -175,6 +195,8 @@ CMakeFiles/untitled5.dir/main.c.o: ../main.c \
 /usr/include/x86_64-linux-gnu/bits/signum-arch.h:
 
 /usr/include/time.h:
+
+/usr/include/x86_64-linux-gnu/asm/errno.h:
 
 /usr/include/x86_64-linux-gnu/bits/ss_flags.h:
 
@@ -271,6 +293,8 @@ CMakeFiles/untitled5.dir/main.c.o: ../main.c \
 /usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h:
+
+/usr/include/string.h:
 
 /usr/include/x86_64-linux-gnu/bits/endian.h:
 
