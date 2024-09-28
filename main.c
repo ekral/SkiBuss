@@ -27,13 +27,19 @@ void format_name(char* const str, const int len, const long id)
 
 void* create_shared(const char* name, const int length)
 {
-    const int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
+    int* p = (void*)-1;
 
-    ftruncate(fd, length);
+    int fd;
 
-    int* p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if((fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG)) != -1)
+    {
+        if(ftruncate(fd, length) != -1)
+        {
+            p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        }
 
-    close(fd); // po namapovani muzu fd zavrit
+        close(fd); // po namapovani muzu fd zavrit
+    }
 
     return p;
 }
