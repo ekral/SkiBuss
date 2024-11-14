@@ -1,5 +1,5 @@
 CMakeFiles/untitled5.dir/main.c.o: \
- /mnt/c/Users/erik/CLionProjects/untitled5/main.c \
+ /mnt/c/Users/erik/CLionProjects/SkiBuss/main.c \
  /usr/include/stdc-predef.h /usr/include/stdio.h \
  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
  /usr/include/features.h /usr/include/features-time64.h \

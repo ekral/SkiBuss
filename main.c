@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
+#include "library.h"
 
 #define NAME_LENGTH 256
 #define STOP_SKIERS_NAME "/waitings"
@@ -22,63 +23,6 @@
 #define LOG_SEMAPHORE_NAME "/log"
 #define WAIT_UNBOARDED_SEMAPHORE_NAME "/wait_unboarded"
 
-void format_name(char* const str, const int len, const long id)
-{
-    snprintf(str, len, "/bus%ld", id);
-}
-
-void* create_shared(const char* name, const int length)
-{
-    int* p = (void*)-1;
-
-    int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
-
-    if(fd != -1)
-    {
-        if(ftruncate(fd, length) != -1)
-        {
-            p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        }
-        close(fd); // po namapovani muzu fd zavrit
-    }
-
-    return p;
-}
-
-///
-/// \param name jméno sdílené paměti
-/// \param length velikost sdílené paměti
-/// \return vrací ukazatel na sdílenou paměť, v případě chyby -1
-void* get_shared(const char* name, const int length)
-{
-    int* p = (void*)-1;
-    const int fd = shm_open(name, O_RDWR, S_IRWXU | S_IRWXG);
-
-    if(fd != -1)
-    {
-        p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        close(fd);
-    }
-
-    return p;
-}
-
-sem_t* create_semaphore(const char* const name, const int init)
-{
-    sem_t* semaphore = sem_open(name, O_CREAT, 0755, init);
-
-    return semaphore;
-}
-
-///
-/// \param name název semaforu
-/// \return vrátí ukazatel na semafor, v případě chyby SEM_FAILED
-sem_t* get_semaphore(const char* const name)
-{
-    sem_t* semaphore = sem_open(name, 0);
-
-    return semaphore;
-}
 
 int fn_bus(const long Z, const long K, const long TB)
 {
@@ -87,14 +31,14 @@ int fn_bus(const long Z, const long K, const long TB)
     sem_t* stop_semaphores[Z];
 
     int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
-    if(stop_skiers != (void*)-1)
+    if(stop_skiers == (void*)-1)
     {
-        perror("Error creating stop_skiers");
+        perror("bus: Error creating stop_skiers");
         goto fail_stop_skiers;
     }
 
     int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
-    if(ptr_log_count != (void*)-1)
+    if(ptr_log_count == (void*)-1)
     {
         perror("Error creating ptr_log_count");
         goto fail_ptr_log_count;
@@ -423,7 +367,7 @@ int main(const int argc, char *argv[])
 
     // Inicializace sdilene pameti
 
-    int* bus_stop_skiers = create_shared(/*STOP_SKIERS_NAME*/NULL, STOP_SKIERS_LENGTH(Z));
+    int* bus_stop_skiers = create_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
     if(bus_stop_skiers == (int*)-1) {
         perror("Error creating bus_stop_skiers");
         goto fail_stop_skiers;
