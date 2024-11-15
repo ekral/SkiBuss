@@ -23,8 +23,16 @@
 #define LOG_SEMAPHORE_NAME "/log"
 #define WAIT_UNBOARDED_SEMAPHORE_NAME "/wait_unboarded"
 
+/// zformátuje řetězec na název zastávky
+/// \param str řetězec
+/// \param len délka řetězce
+/// \param id id zastávky
+void format_name(char* const str, const int len, const long id)
+{
+    snprintf(str, len, "/bus%ld", id);
+}
 
-int fn_bus(const long Z, const long K, const long TB)
+int fn_bus(const long Z, const long K, const long TB, FILE *fp)
 {
     // Ziskani sdilene pameti
 
@@ -33,7 +41,7 @@ int fn_bus(const long Z, const long K, const long TB)
     int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
     if(stop_skiers == (void*)-1)
     {
-        perror("bus: Error creating stop_skiers");
+        perror("Error creating stop_skiers");
         goto fail_stop_skiers;
     }
 
@@ -98,7 +106,7 @@ int fn_bus(const long Z, const long K, const long TB)
     // Vlastni algoritmus
 
     sem_wait(log_semaphore);
-    printf("%d: bus started\n", ++*ptr_log_count);
+    fprintf(fp, "%d: bus started\n", ++*ptr_log_count);
     sem_post(log_semaphore);
 
     bool go_back;
@@ -119,7 +127,7 @@ int fn_bus(const long Z, const long K, const long TB)
 
             const int n = (stop_skiers[j] > free_seats) ? free_seats: stop_skiers[j];
 
-            for (int i = 0; i < n; i++)
+            for (int k = 0; k < n; k++)
             {
                 sem_post(stop_semaphores[j]);
                 sem_wait(boarded_semaphore);
@@ -209,20 +217,65 @@ int fn_rider(const int rider_id, const long Z, const long TL)
     // Ziskani sdilene pameti
 
     int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
+    if(stop_skiers == (void*)-1)
+    {
+        perror("Error creating stop_skiers");
+        goto fail_stop_skiers;
+    }
+
     int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
+    if(ptr_log_count == (void*)-1)
+    {
+        perror("Error creating ptr_log_count");
+        goto fail_ptr_log_count;
+    }
 
     // Ziskani semaforu
 
     sem_t* mutex = get_semaphore(MUTEX_NAME);
+    if(mutex == SEM_FAILED)
+    {
+        perror("Error creating mutex");
+        goto fail_mutex;
+    }
+
     sem_t* boarded_semaphore = get_semaphore(BOARDED_SEMAPHORE_NAME);
+    if(boarded_semaphore == SEM_FAILED)
+    {
+        perror("Error creating boarded_semaphore");
+        goto fail_boarded_semaphore;
+    }
+
     sem_t* unboarded_semaphore = get_semaphore(UNBOARDED_SEMAPHORE_NAME);
+    if(unboarded_semaphore == SEM_FAILED)
+    {
+        perror("Error creating unboarded_semaphore");
+        goto fail_unboarded_semaphore;
+    }
+
     sem_t* log_semaphore = get_semaphore(LOG_SEMAPHORE_NAME);
+    if(log_semaphore == SEM_FAILED)
+    {
+        perror("Error creating log_semaphore");
+        goto fail_log_semaphore;
+    }
+
     sem_t* wait_unboarded_semaphore = get_semaphore(WAIT_UNBOARDED_SEMAPHORE_NAME);
+    if(wait_unboarded_semaphore == SEM_FAILED)
+    {
+        perror("Error creating wait_unboarded_semaphore");
+        goto fail_wait_unboarded_semaphore;
+    }
 
     char name[NAME_LENGTH];
     format_name(name, NAME_LENGTH, bus_stop_index);
 
     sem_t* stop_semaphore = get_semaphore(name);
+    if(stop_semaphore == SEM_FAILED)
+    {
+        perror("Error creating stop_semaphore");
+        goto fail_stop_semaphore;
+    }
 
     // Vlastni algoritmus
 
@@ -259,15 +312,29 @@ int fn_rider(const int rider_id, const long Z, const long TL)
     // Zavreni semaforu a odmapovani sdilene pameti pro tento proces
     // zavreli by se automaticky po dokonceni procesu, ale je lepsi je uzavrit explicitne
 
-    sem_close(mutex);
-    sem_close(boarded_semaphore);
-    sem_close(unboarded_semaphore);
     sem_close(stop_semaphore);
-    sem_close(log_semaphore);
+fail_stop_semaphore:
+
     sem_close(wait_unboarded_semaphore);
+fail_wait_unboarded_semaphore:
+
+    sem_close(log_semaphore);
+fail_log_semaphore:
+
+    sem_close(unboarded_semaphore);
+fail_unboarded_semaphore:
+
+    sem_close(boarded_semaphore);
+fail_boarded_semaphore:
+
+    sem_close(mutex);
+fail_mutex:
 
     munmap(LOG_COUNT_NAME, LOG_COUNT_LENGTH);
+fail_ptr_log_count:
+
     munmap(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
+fail_stop_skiers:
 
     return 0;
 }
@@ -277,6 +344,14 @@ int main(const int argc, char *argv[])
     // TODO osetreni erroru
 
     // Zpracovani vstupnich argumentu
+
+    FILE *fp;
+    fp = fopen("proj2.out.txt", "a");
+    if(fp == NULL)
+    {
+        perror("Error opening file");
+        goto fail_fopen;
+    }
 
     if(argc != 6)
     {
@@ -476,7 +551,7 @@ int main(const int argc, char *argv[])
         time_t t;
         srandom((unsigned)time(&t) ^ getpid());
 
-        fn_bus(Z, K, TB);
+        fn_bus(Z, K, TB, fp);
 
         exit(0);
     }
@@ -518,5 +593,8 @@ fail_log_count:
 
     shm_unlink(STOP_SKIERS_NAME);
 fail_stop_skiers:
+
+    fclose(fp);
+fail_fopen:
     return 0;
 }
