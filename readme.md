@@ -9,13 +9,11 @@ K práci se sdílenou pamětí slouží funkce `create_shared` a `get_shared`.
 1. Vytvoření sdílené paměti
 
 Nejprve se ve funkci `main` zavolá funkce `create_shared`, jméno musí začínat
-znakem `/`. Pro zabránění chybám v názvu si nadefinujeme symbolickou konstantu, například `LOG_SEMAPHORE_NAME` a `LOG_COUNT_LENGTH`.
-
-Funkce po namapování paměti uzavře `shared memory object`, proto voláme jen `shm_unlink`.
+znakem `/`. Pro zabránění překlepům v názvu si nadefinujeme symbolickou konstantu, například `LOG_SEMAPHORE_NAME` a `LOG_COUNT_LENGTH`.
 
 Funkce v případě chyby vrací hodnotu `MAP_FAILED` (což je `(void*)-1`), jinak vrací ukazatel na sdílenou paměť.
 
-Na konci programu uvolníme sdílenou paměť z operačního systému příkazem `shm_unlink`.
+Funkce `create_shared` zavře shared memory object, proto na konci programu už jen uvolníme uvolníme sdílenou paměť z operačního systému příkazem `shm_unlink`.
 
 
 ```cpp
@@ -39,7 +37,7 @@ shm_unlink(LOG_COUNT_NAME);
 
 Pro použití sdílené paměti se zavolá funkce `get_shared`, která má stejné parametry jako funkce `create_shared`.
 
-Funkce v případě chyby vrací hodnotu `MAP_FAILED` (což je `(void*)-1`), jinak vrací ukazatel na sdílenou paměť.
+Funkce v případě chyby opět vrací hodnotu `MAP_FAILED` (což je `(void*)-1`), jinak vrací ukazatel na sdílenou paměť.
 
 Na konci uvolníme sdílenou paměť příkazem munmap, ale sdílená paměť zůstává v operačním systému pro další použití.
 ```cpp
