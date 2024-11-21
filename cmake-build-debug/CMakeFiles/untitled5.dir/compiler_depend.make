@@ -111,11 +111,8 @@ CMakeFiles/untitled5.dir/main.c.o: ../main.c \
   /usr/include/asm-generic/errno.h \
   /usr/include/asm-generic/errno-base.h \
   /usr/include/string.h \
-  /usr/include/strings.h \
-  ../library.h
+  /usr/include/strings.h
 
-
-../library.h:
 
 /usr/include/asm-generic/errno-base.h:
 

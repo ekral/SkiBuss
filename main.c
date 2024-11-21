@@ -10,7 +10,6 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
-#include "library.h"
 
 #define NAME_LENGTH 256
 #define STOP_SKIERS_NAME "/waitings"
@@ -39,6 +38,31 @@ sem_t* wait_unboarded_semaphore;
 void format_name(char* const str, const int len, const long id)
 {
     snprintf(str, len, "/bus%ld", id);
+}
+
+void* create_shared(const char* name, const int length)
+{
+    int* p = (void*)-1;
+
+    int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
+
+    if(fd != -1)
+    {
+        if(ftruncate(fd, length) != -1)
+        {
+            p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        }
+        close(fd); // po namapovani muzu fd zavrit
+    }
+
+    return p;
+}
+
+sem_t* create_semaphore(const char* const name, const int init)
+{
+    sem_t* semaphore = sem_open(name, O_CREAT, 0755, init);
+
+    return semaphore;
 }
 
 int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_semaphores[])
