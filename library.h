@@ -6,7 +6,7 @@
 #define UNTITLED2_LIBRARY_H
 
 
-void* create_shared(const char* name, const int length)
+inline void* create_shared(const char* name, const int length)
 {
     int* p = (void*)-1;
 
@@ -24,7 +24,7 @@ void* create_shared(const char* name, const int length)
     return p;
 }
 
-void* get_shared(const char* name, const int length)
+inline void* get_shared(const char* name, const int length)
 {
     int* p = (void*)-1;
     const int fd = shm_open(name, O_RDWR, S_IRWXU | S_IRWXG);
@@ -38,14 +38,14 @@ void* get_shared(const char* name, const int length)
     return p;
 }
 
-sem_t* create_semaphore(const char* const name, const int init)
+inline sem_t* create_semaphore(const char* const name, const int init)
 {
     sem_t* semaphore = sem_open(name, O_CREAT, 0755, init);
 
     return semaphore;
 }
 
-sem_t* get_semaphore(const char* const name)
+inline sem_t* get_semaphore(const char* const name)
 {
     sem_t* semaphore = sem_open(name, 0);
 

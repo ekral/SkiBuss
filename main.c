@@ -23,6 +23,9 @@
 #define LOG_SEMAPHORE_NAME "/log"
 #define WAIT_UNBOARDED_SEMAPHORE_NAME "/wait_unboarded"
 
+int* bus_stop_skiers;
+int* ptr_log_count;
+
 sem_t* mutex;
 sem_t* boarded_semaphore;
 sem_t* unboarded_semaphore;
@@ -40,24 +43,6 @@ void format_name(char* const str, const int len, const long id)
 
 int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_semaphores[])
 {
-    // Ziskani sdilene pameti
-
-    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
-    if(stop_skiers == (void*)-1)
-    {
-        perror("Error creating stop_skiers");
-        goto fail_stop_skiers;
-    }
-
-    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
-    if(ptr_log_count == (void*)-1)
-    {
-        perror("Error creating ptr_log_count");
-        goto fail_ptr_log_count;
-    }
-
-    // Vlastni algoritmus
-
     sem_wait(log_semaphore);
     fprintf(fp, "%d: bus started\n", ++*ptr_log_count);
     sem_post(log_semaphore);
@@ -78,7 +63,7 @@ int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_sema
             printf("%d: bus arrived to %d\n", ++*ptr_log_count, j + 1);
             sem_post(log_semaphore);
 
-            const int n = (stop_skiers[j] > free_seats) ? free_seats: stop_skiers[j];
+            const int n = (bus_stop_skiers[j] > free_seats) ? free_seats: bus_stop_skiers[j];
 
             for (int k = 0; k < n; k++)
             {
@@ -88,9 +73,9 @@ int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_sema
 
             free_seats -= n;
 
-            stop_skiers[j] -= n;
+            bus_stop_skiers[j] -= n;
 
-            if(stop_skiers[j] > 0)
+            if(bus_stop_skiers[j] > 0)
             {
                 go_back = true;
             }
@@ -127,38 +112,11 @@ int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_sema
     printf("%d: bus finish\n", ++*ptr_log_count);
     sem_post(log_semaphore);
 
-
-    munmap(LOG_COUNT_NAME, LOG_COUNT_LENGTH);
-fail_ptr_log_count:
-
-    munmap(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
-fail_stop_skiers:
-
     return 0;
 }
 
 int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaphores[])
 {
-
-
-
-
-    // Ziskani sdilene pameti
-
-    int* stop_skiers = get_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
-    if(stop_skiers == (void*)-1)
-    {
-        perror("Error creating stop_skiers");
-        goto fail_stop_skiers;
-    }
-
-    int* ptr_log_count = get_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
-    if(ptr_log_count == (void*)-1)
-    {
-        perror("Error creating ptr_log_count");
-        goto fail_ptr_log_count;
-    }
-
     // Nahodne priradim lyzare k zastavce
 
     const long bus_stop_index = random() % Z;
@@ -173,7 +131,7 @@ int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaph
     usleep(random() % TL); // nahodne trvani snidane
 
     sem_wait(mutex);
-    stop_skiers[bus_stop_index]++;
+    bus_stop_skiers[bus_stop_index]++;
     sem_post(mutex);
 
     sem_wait(log_semaphore);
@@ -195,13 +153,6 @@ int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaph
     sem_post(log_semaphore);
 
     sem_post(wait_unboarded_semaphore);
-
-
-    munmap(LOG_COUNT_NAME, LOG_COUNT_LENGTH);
-fail_ptr_log_count:
-
-    munmap(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
-fail_stop_skiers:
 
     return 0;
 }
@@ -312,7 +263,7 @@ int main(const int argc, char *argv[])
 
     // Inicializace sdilene pameti
 
-    int* bus_stop_skiers = create_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
+    bus_stop_skiers = create_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
     if(bus_stop_skiers == (int*)-1) {
         perror("Error creating bus_stop_skiers");
         goto fail_stop_skiers;
@@ -323,7 +274,7 @@ int main(const int argc, char *argv[])
         bus_stop_skiers[i] = 0;
     }
 
-    int* ptr_log_count = create_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
+    ptr_log_count = create_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
     if(ptr_log_count == (int*)-1) {
         perror("Error creating ptr_log_count");
         goto fail_log_count;
@@ -465,9 +416,11 @@ fail_boarded_smaphore:
     sem_unlink(MUTEX_NAME);
 fail_mutex:
 
+    munmap(ptr_log_count, LOG_COUNT_LENGTH);
     shm_unlink(LOG_COUNT_NAME);
 fail_log_count:
 
+    munmap(bus_stop_skiers, STOP_SKIERS_LENGTH(Z));
     shm_unlink(STOP_SKIERS_NAME);
 fail_stop_skiers:
 
