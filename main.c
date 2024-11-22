@@ -372,7 +372,7 @@ int main(const int argc, char *argv[])
 
         if(p == -1)
         {
-            perror("Error creating stop_semaphore");
+            perror("Fork error");
             goto fail_stop_semaphore;
         }
         else if(p == 0)
@@ -390,6 +390,7 @@ int main(const int argc, char *argv[])
 
     if(p == -1)
     {
+        perror("Fork error");
         goto fail_stop_semaphore;
     }
     else if(p == 0)
