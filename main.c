@@ -23,7 +23,7 @@
 
 named_memory_t bus_stop_skiers;
 //int* bus_stop_skiers;
-named_memory_t ptr_log_count;
+named_memory_t log_count;
 //int* ptr_log_count;
 
 named_semaphore_t mutex;
@@ -43,7 +43,7 @@ void format_name(char* const str, const int len, const long id)
 
 int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_semaphores[])
 {
-    int* log =  ptr_log_count.data;
+    int* log =  log_count.data;
     int* skiers = bus_stop_skiers.data;
 
     sem_wait(log_semaphore);
@@ -120,7 +120,7 @@ int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_sema
 
 int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaphores[])
 {
-    int* log =  ptr_log_count.data;
+    int* log =  log_count.data;
     int* skiers = bus_stop_skiers.data;
 
     // Nahodne priradim lyzare k zastavce
@@ -285,7 +285,7 @@ int main(const int argc, char *argv[])
         goto fail_log_count;
     }
 
-    *(int*)ptr_log_count.data = 0;
+    *(int*)log_count.data = 0;
 
     // Inicializace semaforu a jejich zavreni, protoze je jen vytvorime pro pouziti v jinych procesech
 
@@ -419,14 +419,10 @@ fail_boarded_smaphore:
     named_semaphore_destroy(&mutex);
 
 fail_mutex:
-
-    munmap(ptr_log_count, LOG_COUNT_LENGTH);
-    shm_unlink(LOG_COUNT_NAME);
+    named_memory_destroy(&log_count);
 fail_log_count:
-
     named_memory_destroy(&bus_stop_skiers);
 fail_stop_skiers:
-
     fclose(fp);
 fail_fopen:
     return 0;
