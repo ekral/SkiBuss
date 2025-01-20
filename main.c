@@ -21,17 +21,15 @@
 #define WAIT_UNBOARDED_SEMAPHORE_NAME "/wait_unboarded"
 
 
-named_memory_t bus_stop_skiers;
-named_memory_t log_count;
+named_memory_t skiers_at_stops;
 
 sem_t* mutex;
-
 sem_t* boarded_semaphore;
 sem_t* unboarded_semaphore;
 sem_t* wait_unboarded_semaphore;
-
 sem_t* log_semaphore;
 
+named_memory_t log_count;
 void log_message(FILE* fp, const char* format, ...)
 {
     acquire_semaphore(log_semaphore);
@@ -55,7 +53,7 @@ void format_name(char* const str, const int len, const long id)
 
 int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_semaphores[])
 {
-    int* skiers = bus_stop_skiers.data;
+    int* skiers = skiers_at_stops.data;
 
     log_message(fp, "bus started");
 
@@ -121,7 +119,7 @@ int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_sema
 int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaphores[])
 {
     int* log =  log_count.data;
-    int* skiers = bus_stop_skiers.data;
+    int* skiers = skiers_at_stops.data;
 
     // Nahodne priradim lyzare k zastavce
 
@@ -263,12 +261,12 @@ int main(const int argc, char *argv[])
 
     // Inicializace sdilene pameti
 
-    if(named_memory_create(&bus_stop_skiers,"/waitings",  Z * sizeof(int)) == (void*)-1) {
+    if(named_memory_create(&skiers_at_stops,"/waitings",  Z * sizeof(int)) == (void*)-1) {
         perror("Error creating bus_stop_skiers");
         goto fail_stop_skiers;
     }
 
-    int* p1 = bus_stop_skiers.data;
+    int* p1 = skiers_at_stops.data;
     for(int i = 0; i < Z; i++)
     {
         p1[i] = 0;
@@ -415,7 +413,7 @@ fail_boarded_smaphore:
 fail_mutex:
     named_memory_destroy(&log_count);
 fail_log_count:
-    named_memory_destroy(&bus_stop_skiers);
+    named_memory_destroy(&skiers_at_stops);
 fail_stop_skiers:
     fclose(fp);
 fail_fopen:
