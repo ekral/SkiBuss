@@ -5,41 +5,36 @@
 #ifndef UNTITLED2_LIBRARY_H
 #define UNTITLED2_LIBRARY_H
 
-typedef struct
+int create_semaphore(sem_t** semaphore, const char* name, const int init)
 {
-    const char* name;
-    sem_t* sem;
-} named_semaphore_t;
+    *semaphore = sem_open(name, O_CREAT, 0755, init);
 
-sem_t* named_semaphore_init(named_semaphore_t* named_semaphore, const char* name, const int init)
-{
-    named_semaphore->name = name;
+    if (*semaphore == SEM_FAILED)
+    {
+        return -1;
+    }
 
-    named_semaphore->sem = sem_open(name, O_CREAT, 0755, init);
-
-    return named_semaphore->sem;
+    return 0;
 }
 
-int named_semaphore_wait(const named_semaphore_t* named_semaphore)
+int acquire_semaphore(const sem_t* semaphore)
 {
-    int result = sem_wait(named_semaphore->sem);
+    const int result = sem_wait(semaphore);
 
     return result;
 }
 
-int named_semaphore_post(const named_semaphore_t* named_semaphore)
+int release_semaphore(const sem_t* semaphore)
 {
-    int result = sem_post(named_semaphore->sem);
+    const int result = sem_post(semaphore);
 
     return result;
 }
 
-void named_semaphore_destroy(named_semaphore_t* named_semaphore)
+void destroy_semaphore_(const sem_t* semaphore, const char* name)
 {
-    sem_close(named_semaphore->sem);
-    sem_unlink(named_semaphore->name);
-
-    named_semaphore->sem = NULL;
+    sem_close(semaphore);
+    sem_unlink(name);
 }
 
 typedef struct
@@ -49,7 +44,7 @@ typedef struct
     int size;
 } named_memory_t;
 
-void* named_memory_init(named_memory_t* named_memory, const char* name, const int size)
+void* named_memory_create(named_memory_t* named_memory, const char* name, const int size)
 {
     named_memory->name = name;
     named_memory->size = size;
@@ -64,8 +59,22 @@ void* named_memory_init(named_memory_t* named_memory, const char* name, const in
         {
             named_memory->data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         }
+        else
+        {
+            return -1;
+        }
 
-        close(fd); // po namapovani muzu fd zavrit
+        // po namapovani muzu fd zavrit
+        if (close(fd) != 0)
+        {
+            return -1;
+        }
+
+        return 0;
+    }
+    else
+    {
+        return -1;
     }
 
     return named_memory->data;
