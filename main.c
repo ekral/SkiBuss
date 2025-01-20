@@ -27,12 +27,12 @@ sem_t* mutex;
 sem_t* boarded_semaphore;
 sem_t* unboarded_semaphore;
 sem_t* wait_unboarded_semaphore;
-sem_t* log_semaphore;
+sem_t* log_mutex;
 
 named_memory_t log_count;
 void log_message(FILE* fp, const char* format, ...)
 {
-    acquire_semaphore(log_semaphore);
+    acquire_semaphore(log_mutex);
 
     fprintf("%d:",++log_count.data);
 
@@ -43,7 +43,7 @@ void log_message(FILE* fp, const char* format, ...)
 
     fprintf(fp, "\n");
 
-    release_semaphore(log_semaphore);
+    release_semaphore(log_mutex);
 }
 
 void format_name(char* const str, const int len, const long id)
@@ -128,9 +128,9 @@ int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaph
 
     // Vlastni algoritmus
 
-    sem_wait(log_semaphore);
+    sem_wait(log_mutex);
     printf("%d: L %d started\n", ++*log, rider_id);
-    sem_post(log_semaphore);
+    sem_post(log_mutex);
 
     usleep(random() % TL); // nahodne trvani snidane
 
@@ -272,7 +272,7 @@ int main(const int argc, char *argv[])
         p1[i] = 0;
     }
 
-    if(named_memory_create(&log_semaphore,"/A",sizeof(int)) == (void*)-1) {
+    if(named_memory_create(&log_mutex,"/A",sizeof(int)) == (void*)-1) {
         perror("Error creating ptr_log_count");
         goto fail_log_count;
     }
@@ -304,8 +304,8 @@ int main(const int argc, char *argv[])
     }
     //sem_close(unboarded_semaphore);
 
-    log_semaphore = create_semaphore(LOG_SEMAPHORE_NAME, 1);
-    if(log_semaphore == SEM_FAILED)
+    log_mutex = create_semaphore(LOG_SEMAPHORE_NAME, 1);
+    if(log_mutex == SEM_FAILED)
     {
         perror("Error creating log_smaphore");
         goto fail_log_smaphore;
@@ -397,7 +397,7 @@ fail_stop_semaphore:
     sem_unlink(WAIT_UNBOARDED_SEMAPHORE_NAME);
 fail_wait_unboarded_smaphore:
 
-    sem_close(log_semaphore);
+    sem_close(log_mutex);
     sem_unlink(LOG_SEMAPHORE_NAME);
 fail_log_smaphore:
 
