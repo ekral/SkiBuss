@@ -5,11 +5,25 @@
 #ifndef UNTITLED2_LIBRARY_H
 #define UNTITLED2_LIBRARY_H
 
-int create_semaphore(sem_t** semaphore, const char* name, const int init)
-{
-    *semaphore = sem_open(name, O_CREAT, 0755, init);
+#define NAME_LENGTH 256
 
-    if (*semaphore == SEM_FAILED)
+typedef struct {
+    const char* name;
+    sem_t semaphore;
+} named_semaphore_t;
+
+typedef struct {
+    int id;
+    sem_t semaphore;
+} indexed_semaphore_t;
+
+inline int create_named_semaphore(named_semaphore_t* named_semaphore, const char* name, const int init)
+{
+    named_semaphore->name = name;
+
+    named_semaphore->semaphore = sem_open(named_semaphore->name, O_CREAT, 0755, init);
+
+    if (named_semaphore->semaphore == SEM_FAILED)
     {
         return -1;
     }
@@ -17,24 +31,83 @@ int create_semaphore(sem_t** semaphore, const char* name, const int init)
     return 0;
 }
 
-int acquire_semaphore(const sem_t* semaphore)
+inline void format_name(char* const str, const int len, const long id)
+{
+    snprintf(str, len, "/bus%ld", id);
+}
+
+
+inline int create_indexed_semaphore(indexed_semaphore_t* indexed_semaphore, const int id, const int init)
+{
+    indexed_semaphore->id = id;
+
+    char name[NAME_LENGTH];
+    format_name(name, NAME_LENGTH, indexed_semaphore->id);
+
+    indexed_semaphore->semaphore = sem_open(name, O_CREAT, 0755, init);
+
+    if (indexed_semaphore->semaphore == SEM_FAILED)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+
+inline int acquire_semaphore(sem_t* semaphore)
 {
     const int result = sem_wait(semaphore);
 
     return result;
 }
 
-int release_semaphore(const sem_t* semaphore)
+inline int release_semaphore(sem_t* semaphore)
 {
     const int result = sem_post(semaphore);
 
     return result;
 }
 
-void destroy_semaphore_(const sem_t* semaphore, const char* name)
+inline int destroy_named_semaphore_(named_semaphore_t* named_semaphore)
 {
-    sem_close(semaphore);
-    sem_unlink(name);
+    int result = 0;
+
+    if (sem_close(named_semaphore->semaphore) == -1)
+    {
+        result = -1;
+    }
+
+    if (sem_unlink(named_semaphore->name) == -1)
+    {
+        result = -1;
+    }
+
+    named_semaphore->semaphore = NULL;
+
+    return result;
+}
+
+inline int destroy_indexed_semaphore_(indexed_semaphore_t* indexed_semaphore)
+{
+    int result = 0;
+
+    if (sem_close(indexed_semaphore->semaphore) == -1)
+    {
+        result = -1;
+    }
+
+    char name[NAME_LENGTH];
+    format_name(name, NAME_LENGTH, indexed_semaphore->id);
+
+    if (sem_unlink(name) == -1)
+    {
+        result = -1;
+    }
+
+    indexed_semaphore->semaphore = NULL;
+
+    return result;
 }
 
 typedef struct
@@ -44,7 +117,7 @@ typedef struct
     int size;
 } named_memory_t;
 
-void* named_memory_create(named_memory_t* named_memory, const char* name, const int size)
+inline int named_memory_create(named_memory_t* named_memory, const char* name, const int size)
 {
     named_memory->name = name;
     named_memory->size = size;
@@ -77,13 +150,22 @@ void* named_memory_create(named_memory_t* named_memory, const char* name, const 
         return -1;
     }
 
-    return named_memory->data;
+    return 0;
 }
 
-int named_memory_destroy(named_memory_t* named_memory)
+inline int named_memory_destroy(named_memory_t* named_memory)
 {
-    munmap(named_memory->data, named_memory->size);
-    int result = shm_unlink(named_memory->name);
+    int result = 0;
+
+    if (munmap(named_memory->data, named_memory->size) == -1)
+    {
+        result = -1;
+    }
+
+    if (shm_unlink(named_memory->name) == -1)
+    {
+        result = -1;
+    }
 
     named_memory->data = NULL;
 

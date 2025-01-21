@@ -13,7 +13,7 @@
 #include <stdarg.h>
 #include "library.h"
 
-#define NAME_LENGTH 256
+
 #define LOG_COUNT_LENGTH sizeof(int)
 #define BOARDED_SEMAPHORE_NAME "/boarded"
 #define UNBOARDED_SEMAPHORE_NAME "/unboarded"
@@ -46,10 +46,7 @@ void log_message(FILE* fp, const char* format, ...)
     release_semaphore(log_mutex);
 }
 
-void format_name(char* const str, const int len, const long id)
-{
-    snprintf(str, len, "/bus%ld", id);
-}
+
 
 int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_semaphores[])
 {
