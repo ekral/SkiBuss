@@ -42,7 +42,6 @@ inline void format_name(char* const str, const int len, const long id)
     snprintf(str, len, "/bus%ld", id);
 }
 
-
 inline int indexed_semaphore_create(indexed_semaphore_t* indexed_semaphore, const int id, const int init)
 {
     if (indexed_semaphore == NULL)
@@ -60,6 +59,7 @@ inline int indexed_semaphore_create(indexed_semaphore_t* indexed_semaphore, cons
 
     if (indexed_semaphore->semaphore == SEM_FAILED)
     {
+        perror("sem_open");
         return -1;
     }
 
@@ -93,11 +93,13 @@ inline int named_semaphore_destroy(named_semaphore_t* named_semaphore)
 
     if (sem_close(named_semaphore->semaphore) == -1)
     {
+        perror("sem_close");
         result = -1;
     }
 
     if (sem_unlink(named_semaphore->name) == -1)
     {
+        perror("sem_unlink");
         result = -1;
     }
 
@@ -118,6 +120,7 @@ inline int indexed_semaphore_destroy(indexed_semaphore_t* indexed_semaphore)
 
     if (sem_close(indexed_semaphore->semaphore) == -1)
     {
+        perror("sem_close");
         result = -1;
     }
 
@@ -126,6 +129,7 @@ inline int indexed_semaphore_destroy(indexed_semaphore_t* indexed_semaphore)
 
     if (sem_unlink(name) == -1)
     {
+        perror("sem_unlink");
         result = -1;
     }
 
@@ -158,12 +162,14 @@ inline int named_memory_create(named_memory_t* named_memory, const char* name, c
         }
         else
         {
+            perror("ftruncate");
             return -1;
         }
 
         // po namapovani muzu fd zavrit
         if (close(fd) != 0)
         {
+            perror("close");
             return -1;
         }
 
@@ -171,6 +177,7 @@ inline int named_memory_create(named_memory_t* named_memory, const char* name, c
     }
     else
     {
+        perror("shm_open");
         return -1;
     }
 
@@ -183,11 +190,13 @@ inline int named_memory_destroy(named_memory_t* named_memory)
 
     if (munmap(named_memory->data, named_memory->size) == -1)
     {
+        perror("munmap");
         result = -1;
     }
 
     if (shm_unlink(named_memory->name) == -1)
     {
+        perror("shm_unlink");
         result = -1;
     }
 
