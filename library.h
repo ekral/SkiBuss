@@ -17,14 +17,20 @@ typedef struct {
     sem_t semaphore;
 } indexed_semaphore_t;
 
-inline int create_named_semaphore(named_semaphore_t* named_semaphore, const char* name, const int init)
+inline int named_semaphore_create(named_semaphore_t* named_semaphore, const char* name, const int init)
 {
-    named_semaphore->name = name;
+    if (named_semaphore == NULL || name == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
 
+    named_semaphore->name = name;
     named_semaphore->semaphore = sem_open(named_semaphore->name, O_CREAT, 0755, init);
 
     if (named_semaphore->semaphore == SEM_FAILED)
     {
+        perror("sem_open");
         return -1;
     }
 
@@ -37,8 +43,14 @@ inline void format_name(char* const str, const int len, const long id)
 }
 
 
-inline int create_indexed_semaphore(indexed_semaphore_t* indexed_semaphore, const int id, const int init)
+inline int indexed_semaphore_create(indexed_semaphore_t* indexed_semaphore, const int id, const int init)
 {
+    if (indexed_semaphore == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
     indexed_semaphore->id = id;
 
     char name[NAME_LENGTH];
@@ -69,8 +81,14 @@ inline int release_semaphore(sem_t* semaphore)
     return result;
 }
 
-inline int destroy_named_semaphore_(named_semaphore_t* named_semaphore)
+inline int named_semaphore_destroy(named_semaphore_t* named_semaphore)
 {
+    if (named_semaphore == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
     int result = 0;
 
     if (sem_close(named_semaphore->semaphore) == -1)
@@ -88,8 +106,14 @@ inline int destroy_named_semaphore_(named_semaphore_t* named_semaphore)
     return result;
 }
 
-inline int destroy_indexed_semaphore_(indexed_semaphore_t* indexed_semaphore)
+inline int indexed_semaphore_destroy(indexed_semaphore_t* indexed_semaphore)
 {
+    if (indexed_semaphore == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
     int result = 0;
 
     if (sem_close(indexed_semaphore->semaphore) == -1)
