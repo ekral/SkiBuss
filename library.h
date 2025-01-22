@@ -9,12 +9,12 @@
 
 typedef struct {
     const char* name;
-    sem_t semaphore;
+    sem_t* semaphore;
 } named_semaphore_t;
 
 typedef struct {
     int id;
-    sem_t semaphore;
+    sem_t* semaphore;
 } indexed_semaphore_t;
 
 inline int named_semaphore_create(named_semaphore_t* named_semaphore, const char* name, const int init)
@@ -67,14 +67,14 @@ inline int indexed_semaphore_create(indexed_semaphore_t* indexed_semaphore, cons
 }
 
 
-inline int acquire_semaphore(sem_t* semaphore)
+inline int acquire(sem_t* semaphore)
 {
     const int result = sem_wait(semaphore);
 
     return result;
 }
 
-inline int release_semaphore(sem_t* semaphore)
+inline int release(sem_t* semaphore)
 {
     const int result = sem_post(semaphore);
 
@@ -141,7 +141,7 @@ inline int indexed_semaphore_destroy(indexed_semaphore_t* indexed_semaphore)
 typedef struct
 {
     const char* name;
-    void* data;
+    int* data;
     int size;
 } named_memory_t;
 
@@ -150,15 +150,13 @@ inline int named_memory_create(named_memory_t* named_memory, const char* name, c
     named_memory->name = name;
     named_memory->size = size;
 
-    named_memory->data = (void*)-1;
-
-    const int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
+    const int fd = shm_open(named_memory->name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
 
     if(fd != -1)
     {
         if(ftruncate(fd, size) != -1)
         {
-            named_memory->data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+            named_memory->data = mmap(NULL, named_memory->size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         }
         else
         {
