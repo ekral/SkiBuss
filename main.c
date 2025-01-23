@@ -10,50 +10,66 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
-#include <stdarg.h>
-#include "library.h"
 
-
+#define NAME_LENGTH 256
+#define STOP_SKIERS_NAME "/waitings"
+#define STOP_SKIERS_LENGTH(n) n * sizeof(int)
+#define LOG_COUNT_NAME "/A"
 #define LOG_COUNT_LENGTH sizeof(int)
+#define MUTEX_NAME "/mutex"
 #define BOARDED_SEMAPHORE_NAME "/boarded"
 #define UNBOARDED_SEMAPHORE_NAME "/unboarded"
 #define LOG_SEMAPHORE_NAME "/log"
 #define WAIT_UNBOARDED_SEMAPHORE_NAME "/wait_unboarded"
 
+int* bus_stop_skiers;
+int* ptr_log_count;
 
-named_memory_t skiers_at_stops;
+sem_t* mutex;
+sem_t* boarded_semaphore;
+sem_t* unboarded_semaphore;
+sem_t* log_semaphore;
+sem_t* wait_unboarded_semaphore;
 
-named_semaphore_t mutex;
-named_semaphore_t boarded_semaphore;
-named_semaphore_t unboarded_semaphore;
-named_semaphore_t wait_unboarded_semaphore;
-
-
-FILE* fp;
-named_memory_t log_count;
-named_semaphore_t log_mutex;
-
-void log_message(const char* format, ...)
+/// zformátuje řetězec na název zastávky
+/// \param str řetězec
+/// \param len délka řetězce
+/// \param id id zastávky
+void format_name(char* const str, const int len, const long id)
 {
-    acquire(log_mutex.semaphore);
-
-    fprintf(fp,"%d:", ++*log_count.data);
-
-    va_list va;
-    va_start(va, format);
-    vfprintf(fp, format, va);
-    va_end(va);
-
-    fprintf(fp, "\n");
-
-    release(log_mutex.semaphore);
+    snprintf(str, len, "/bus%ld", id);
 }
 
-int fn_bus(const long Z, const long K, const long TB, sem_t* stop_semaphores[])
+void* create_shared(const char* name, const int length)
 {
-    int* skiers = skiers_at_stops.data;
+    int* p = (void*)-1;
 
-    log_message("bus started");
+    int fd = shm_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG);
+
+    if(fd != -1)
+    {
+        if(ftruncate(fd, length) != -1)
+        {
+            p = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        }
+        close(fd); // po namapovani muzu fd zavrit
+    }
+
+    return p;
+}
+
+sem_t* create_semaphore(const char* const name, const int init)
+{
+    sem_t* semaphore = sem_open(name, O_CREAT, 0755, init);
+
+    return semaphore;
+}
+
+int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_semaphores[])
+{
+    sem_wait(log_semaphore);
+    fprintf(fp, "%d: bus started\n", ++*ptr_log_count);
+    sem_post(log_semaphore);
 
     bool go_back;
 
@@ -65,51 +81,60 @@ int fn_bus(const long Z, const long K, const long TB, sem_t* stop_semaphores[])
 
         for(int j = 0; j < Z; j++)
         {
-            acquire(mutex.semaphore);
+            sem_wait(mutex);
 
-            log_message("bus arrived to %d", j + 1);
+            sem_wait(log_semaphore);
+            printf("%d: bus arrived to %d\n", ++*ptr_log_count, j + 1);
+            sem_post(log_semaphore);
 
-            const int n = (skiers[j] > free_seats) ? free_seats: skiers[j];
+            const int n = (bus_stop_skiers[j] > free_seats) ? free_seats: bus_stop_skiers[j];
 
             for (int k = 0; k < n; k++)
             {
-                release(stop_semaphores[j]);
-                acquire(boarded_semaphore.semaphore);
+                sem_post(stop_semaphores[j]);
+                sem_wait(boarded_semaphore);
             }
 
             free_seats -= n;
 
-            skiers[j] -= n;
+            bus_stop_skiers[j] -= n;
 
-            if(skiers[j] > 0)
+            if(bus_stop_skiers[j] > 0)
             {
                 go_back = true;
             }
 
-            log_message("bus leaving %d", j + 1);
+            sem_wait(log_semaphore);
+            printf("%d: bus leaving %d\n", ++*ptr_log_count, j + 1);
+            sem_post(log_semaphore);
 
-            release(mutex.semaphore);
+            sem_post(mutex);
 
-            usleep(random() % TB); // uspani na dobu cesty k dalsi zastavce
+            usleep(random() % TB); // uspani na ddbu cesty k dalsi zastavce
         }
 
-
-        log_message("bus arrived to final");
+        sem_wait(log_semaphore);
+        printf("%d: bus arrived to final\n", ++*ptr_log_count);
+        sem_post(log_semaphore);
 
         // TODO synchronizace vystupu na konecne
         int riders = (int)K - free_seats;
 
         for(int j = 0; j < riders; j++)
         {
-            release(unboarded_semaphore.semaphore);
-            acquire(wait_unboarded_semaphore.semaphore);
+            sem_post(unboarded_semaphore);
+            sem_wait(wait_unboarded_semaphore);
         }
 
-        log_message("bus leaving final");
+        sem_wait(log_semaphore);
+        printf("%d: bus leaving final\n", ++*ptr_log_count);
+        sem_post(log_semaphore);
 
     } while(go_back);
 
-    log_message("bus finish\n");
+    sem_wait(log_semaphore);
+    printf("%d: bus finish\n", ++*ptr_log_count);
+    sem_post(log_semaphore);
 
     return 0;
 }
@@ -119,31 +144,39 @@ int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaph
     // Nahodne priradim lyzare k zastavce
 
     const long bus_stop_index = random() % Z;
-    indexed_semaphore_t stop_semaphore = stop_semaphores[bus_stop_index];
+    sem_t* stop_semaphore = stop_semaphores[bus_stop_index];
 
     // Vlastni algoritmus
 
-    log_message("L %d started\n", rider_id);
+    sem_wait(log_semaphore);
+    printf("%d: L %d started\n", ++*ptr_log_count, rider_id);
+    sem_post(log_semaphore);
 
     usleep(random() % TL); // nahodne trvani snidane
 
-    acquire(mutex.semaphore);
-    skiers_at_stops.data[bus_stop_index]++;
-    release(mutex.semaphore);
+    sem_wait(mutex);
+    bus_stop_skiers[bus_stop_index]++;
+    sem_post(mutex);
 
-    log_message("L %d arrived to %ld", rider_id, bus_stop_index + 1);
+    sem_wait(log_semaphore);
+    printf("%d: L %d arrived to %ld\n", ++*ptr_log_count, rider_id, bus_stop_index + 1);
+    sem_post(log_semaphore);
 
-    acquire(stop_semaphore.semaphore);
+    sem_wait(stop_semaphore);
 
-    release(boarded_semaphore.semaphore);
+    sem_post(boarded_semaphore);
 
-    log_message("L %d boarded", rider_id);
+    sem_wait(log_semaphore);
+    printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
+    sem_post(log_semaphore);
 
-    acquire(unboarded_semaphore.semaphore);
+    sem_wait(unboarded_semaphore);
 
-    log_message("L %d un-boarded", rider_id);
+    sem_wait(log_semaphore);
+    printf("%d: L %d unboarded\n", ++*ptr_log_count, rider_id);
+    sem_post(log_semaphore);
 
-    release(wait_unboarded_semaphore.semaphore);
+    sem_post(wait_unboarded_semaphore);
 
     return 0;
 }
@@ -245,7 +278,7 @@ int main(const int argc, char *argv[])
 
     // Soubor pro logovani
 
-    fp = fopen("proj2.out.txt", "a");
+    FILE *fp = fopen("proj2.out.txt", "a");
     if(fp == NULL)
     {
         perror("Error opening file");
@@ -254,49 +287,53 @@ int main(const int argc, char *argv[])
 
     // Inicializace sdilene pameti
 
-    if(named_memory_create(&skiers_at_stops,"/waitings",  Z * sizeof(int)) == -1) {
+    bus_stop_skiers = create_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
+    if(bus_stop_skiers == (int*)-1) {
         perror("Error creating bus_stop_skiers");
         goto fail_stop_skiers;
     }
 
-    int* p1 = skiers_at_stops.data;
     for(int i = 0; i < Z; i++)
     {
-        p1[i] = 0;
+        bus_stop_skiers[i] = 0;
     }
 
-    if(named_memory_create(&log_count,"/A",sizeof(int)) == -1) {
+    ptr_log_count = create_shared(LOG_COUNT_NAME,LOG_COUNT_LENGTH);
+    if(ptr_log_count == (int*)-1) {
         perror("Error creating ptr_log_count");
         goto fail_log_count;
     }
 
-    *log_count.data = 0;
+    *ptr_log_count = 0;
 
     // Inicializace semaforu a jejich zavreni, protoze je jen vytvorime pro pouziti v jinych procesech
 
-    if(named_semaphore_create(&mutex, "/mutex", 1) == -1)
+    mutex = create_semaphore(MUTEX_NAME, 1);
+    if(mutex == SEM_FAILED)
     {
         perror("Error creating mutex");
         goto fail_mutex;
     }
     //sem_close(mutex);
 
-    if(named_semaphore_create(&boarded_semaphore, BOARDED_SEMAPHORE_NAME, 0) == -1)
+    boarded_semaphore = create_semaphore(BOARDED_SEMAPHORE_NAME, 0);
+    if(boarded_semaphore == SEM_FAILED)
     {
         perror("Error creating boarded_smaphore");
         goto fail_boarded_smaphore;
     }
     //sem_close(boarded_semaphore);
 
-    if(named_semaphore_create(&boarded_semaphore, UNBOARDED_SEMAPHORE_NAME, 0) == -1)
+    unboarded_semaphore = create_semaphore(UNBOARDED_SEMAPHORE_NAME, 0);
+    if(unboarded_semaphore == SEM_FAILED)
     {
         perror("Error creating uboarded_smaphore");
         goto fail_uboarded_smaphore;
     }
     //sem_close(unboarded_semaphore);
 
-    log_mutex = create_semaphore(LOG_SEMAPHORE_NAME, 1);
-    if(log_mutex == SEM_FAILED)
+    log_semaphore = create_semaphore(LOG_SEMAPHORE_NAME, 1);
+    if(log_semaphore == SEM_FAILED)
     {
         perror("Error creating log_smaphore");
         goto fail_log_smaphore;
@@ -361,7 +398,7 @@ int main(const int argc, char *argv[])
         time_t t;
         srandom((unsigned)time(&t) ^ getpid());
 
-        fn_bus(Z, K, TB, stop_semaphores);
+        fn_bus(Z, K, TB, fp, stop_semaphores);
 
         exit(0);
     }
@@ -388,7 +425,7 @@ fail_stop_semaphore:
     sem_unlink(WAIT_UNBOARDED_SEMAPHORE_NAME);
 fail_wait_unboarded_smaphore:
 
-    sem_close(log_mutex);
+    sem_close(log_semaphore);
     sem_unlink(LOG_SEMAPHORE_NAME);
 fail_log_smaphore:
 
@@ -399,13 +436,19 @@ fail_uboarded_smaphore:
     sem_close(boarded_semaphore);
     sem_unlink(BOARDED_SEMAPHORE_NAME);
 fail_boarded_smaphore:
-    named_semaphore_destroy(&mutex);
 
+    sem_close(mutex);
+    sem_unlink(MUTEX_NAME);
 fail_mutex:
-    named_memory_destroy(&log_count);
+
+    munmap(ptr_log_count, LOG_COUNT_LENGTH);
+    shm_unlink(LOG_COUNT_NAME);
 fail_log_count:
-    named_memory_destroy(&skiers_at_stops);
+
+    munmap(bus_stop_skiers, STOP_SKIERS_LENGTH(Z));
+    shm_unlink(STOP_SKIERS_NAME);
 fail_stop_skiers:
+
     fclose(fp);
 fail_fopen:
     return 0;
