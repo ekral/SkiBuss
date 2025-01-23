@@ -95,5 +95,4 @@ CMakeFiles/untitled5.dir/main.c.o: \
  /usr/include/x86_64-linux-gnu/bits/errno.h /usr/include/linux/errno.h \
  /usr/include/x86_64-linux-gnu/asm/errno.h \
  /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
- /usr/include/string.h /usr/include/strings.h \
- /mnt/c/Users/erik/CLionProjects/SkiBuss/library.h
+ /usr/include/string.h /usr/include/strings.h

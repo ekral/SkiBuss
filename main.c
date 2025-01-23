@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
+#include <stdarg.h>
 
 #define NAME_LENGTH 256
 #define STOP_SKIERS_NAME "/waitings"
@@ -30,6 +31,31 @@ sem_t* boarded_semaphore;
 sem_t* unboarded_semaphore;
 sem_t* log_semaphore;
 sem_t* wait_unboarded_semaphore;
+
+void log_message(const char* format, ...)
+{
+    sem_wait(log_semaphore);
+
+    FILE* fp = fopen("proj2.out.txt", "a");
+    if(fp == NULL)
+    {
+        perror("Error opening file");
+        return;
+    }
+
+    fprintf(fp,"%d:", ++*ptr_log_count);
+
+    va_list va;
+    va_start(va, format);
+    vfprintf(fp, format, va);
+    va_end(va);
+
+    fprintf(fp, "\n");
+
+    fclose(fp);
+
+    sem_post(log_semaphore);
+}
 
 /// zformátuje řetězec na název zastávky
 /// \param str řetězec
@@ -65,10 +91,10 @@ sem_t* create_semaphore(const char* const name, const int init)
     return semaphore;
 }
 
-int fn_bus(const long Z, const long K, const long TB, FILE *fp, sem_t* stop_semaphores[])
+int fn_bus(const long Z, const long K, const long TB, sem_t* stop_semaphores[])
 {
     sem_wait(log_semaphore);
-    fprintf(fp, "%d: bus started\n", ++*ptr_log_count);
+    printf("%d: bus started\n", ++*ptr_log_count);
     sem_post(log_semaphore);
 
     bool go_back;
@@ -276,15 +302,6 @@ int main(const int argc, char *argv[])
 
     sem_t* stop_semaphores[Z];
 
-    // Soubor pro logovani
-
-    FILE *fp = fopen("proj2.out.txt", "a");
-    if(fp == NULL)
-    {
-        perror("Error opening file");
-        goto fail_fopen;
-    }
-
     // Inicializace sdilene pameti
 
     bus_stop_skiers = create_shared(STOP_SKIERS_NAME, STOP_SKIERS_LENGTH(Z));
@@ -365,6 +382,9 @@ int main(const int argc, char *argv[])
     }
 
     // Spusteni procesu vcetne inicializace nahodnych cisel
+    log_message("prvni");
+    log_message("druhy");
+    log_message("treti");
 
     for(int k = 0; k < L; k++)
     {
@@ -398,7 +418,7 @@ int main(const int argc, char *argv[])
         time_t t;
         srandom((unsigned)time(&t) ^ getpid());
 
-        fn_bus(Z, K, TB, fp, stop_semaphores);
+        fn_bus(Z, K, TB, stop_semaphores);
 
         exit(0);
     }
@@ -449,7 +469,5 @@ fail_log_count:
     shm_unlink(STOP_SKIERS_NAME);
 fail_stop_skiers:
 
-    fclose(fp);
-fail_fopen:
     return 0;
 }
