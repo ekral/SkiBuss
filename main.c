@@ -93,9 +93,7 @@ sem_t* create_semaphore(const char* const name, const int init)
 
 int fn_bus(const long Z, const long K, const long TB, sem_t* stop_semaphores[])
 {
-    sem_wait(log_semaphore);
-    printf("%d: bus started\n", ++*ptr_log_count);
-    sem_post(log_semaphore);
+    log_message("bus started");
 
     bool go_back;
 
@@ -109,9 +107,7 @@ int fn_bus(const long Z, const long K, const long TB, sem_t* stop_semaphores[])
         {
             sem_wait(mutex);
 
-            sem_wait(log_semaphore);
-            printf("%d: bus arrived to %d\n", ++*ptr_log_count, j + 1);
-            sem_post(log_semaphore);
+            log_message("bus arrived to %d", j + 1);
 
             const int n = (bus_stop_skiers[j] > free_seats) ? free_seats: bus_stop_skiers[j];
 
@@ -130,18 +126,14 @@ int fn_bus(const long Z, const long K, const long TB, sem_t* stop_semaphores[])
                 go_back = true;
             }
 
-            sem_wait(log_semaphore);
-            printf("%d: bus leaving %d\n", ++*ptr_log_count, j + 1);
-            sem_post(log_semaphore);
+            log_message("bus leaving %d", j + 1);
 
             sem_post(mutex);
 
             usleep(random() % TB); // uspani na ddbu cesty k dalsi zastavce
         }
 
-        sem_wait(log_semaphore);
-        printf("%d: bus arrived to final\n", ++*ptr_log_count);
-        sem_post(log_semaphore);
+        log_message("bus arrived to final");
 
         // TODO synchronizace vystupu na konecne
         int riders = (int)K - free_seats;
@@ -152,15 +144,11 @@ int fn_bus(const long Z, const long K, const long TB, sem_t* stop_semaphores[])
             sem_wait(wait_unboarded_semaphore);
         }
 
-        sem_wait(log_semaphore);
-        printf("%d: bus leaving final\n", ++*ptr_log_count);
-        sem_post(log_semaphore);
+        log_message("bus leaving final");
 
     } while(go_back);
 
-    sem_wait(log_semaphore);
-    printf("%d: bus finish\n", ++*ptr_log_count);
-    sem_post(log_semaphore);
+    log_message("bus finish");
 
     return 0;
 }
@@ -174,9 +162,7 @@ int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaph
 
     // Vlastni algoritmus
 
-    sem_wait(log_semaphore);
-    printf("%d: L %d started\n", ++*ptr_log_count, rider_id);
-    sem_post(log_semaphore);
+    log_message("L %d started", rider_id);
 
     usleep(random() % TL); // nahodne trvani snidane
 
@@ -184,23 +170,17 @@ int fn_rider(const int rider_id, const long Z, const long TL, sem_t* stop_semaph
     bus_stop_skiers[bus_stop_index]++;
     sem_post(mutex);
 
-    sem_wait(log_semaphore);
-    printf("%d: L %d arrived to %ld\n", ++*ptr_log_count, rider_id, bus_stop_index + 1);
-    sem_post(log_semaphore);
+    log_message("L %d arrived to %ld", rider_id, bus_stop_index + 1);
 
     sem_wait(stop_semaphore);
 
     sem_post(boarded_semaphore);
 
-    sem_wait(log_semaphore);
-    printf("%d: L %d boarded\n", ++*ptr_log_count, rider_id);
-    sem_post(log_semaphore);
+    log_message("L %d boarded", rider_id);
 
     sem_wait(unboarded_semaphore);
 
-    sem_wait(log_semaphore);
-    printf("%d: L %d unboarded\n", ++*ptr_log_count, rider_id);
-    sem_post(log_semaphore);
+    log_message("unboarded", rider_id);
 
     sem_post(wait_unboarded_semaphore);
 
@@ -382,10 +362,6 @@ int main(const int argc, char *argv[])
     }
 
     // Spusteni procesu vcetne inicializace nahodnych cisel
-    log_message("prvni");
-    log_message("druhy");
-    log_message("treti");
-
     for(int k = 0; k < L; k++)
     {
         const pid_t p = fork();
